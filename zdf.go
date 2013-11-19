@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
@@ -13,7 +14,9 @@ var mediaZdf = &Mediathek{
 	Parse:     parseZdf,
 	UsageLine: "zdf contentId",
 	Short:     "helper for www.zdf.de/ZDFmediathek/..",
-	Long:      `Todo`,
+	Long: `
+input: http://zdf.de/ZDFmediathek/beitrag/video/....
+`,
 }
 
 func findMetaUrl(url string) (string, error) {
@@ -90,12 +93,22 @@ func findZdfRtmpUrl(url string) (string, error) {
 	return "", fmt.Errorf("Error: RTMP-URL not found")
 }
 
+var correctUrl = regexp.MustCompile(`http://zdf.de/ZDFmediathek/beitrag/video/([\d]+)/`)
+
 func parseZdf(media *Mediathek, args []string) {
 	if len(args) == 0 {
 		media.Usage()
 	}
 
-	url := fmt.Sprintf("http://www.zdf.de/ZDFmediathek/xmlservice/web/beitragsDetails?id=%s", args[0])
+	idMatch := correctUrl.FindStringSubmatch(args[0])
+	if len(idMatch) != 2 {
+		fmt.Println("Not a valid ZDFmediathek url.")
+		setExitStatus(1)
+		exit()
+	}
+	fmt.Printf("Id found:%s\n", idMatch[1])
+
+	url := fmt.Sprintf("http://www.zdf.de/ZDFmediathek/xmlservice/web/beitragsDetails?id=%s", idMatch[1])
 	metaUrl, err := findMetaUrl(url)
 	if err != nil {
 		fmt.Printf("Error during findMetaUrl: %s\n", err)

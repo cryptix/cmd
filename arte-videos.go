@@ -3,10 +3,7 @@ package main
 import (
 	"code.google.com/p/go.net/html"
 	"encoding/xml"
-	"errors"
 	"fmt"
-
-	// "log" // verbose
 	"net/http"
 	"regexp"
 	"strings"
@@ -18,8 +15,6 @@ var mediaArteVideos = &Mediathek{
 	Short:     "helper for videos.arte.tv",
 	Long: `
 input: http://videos.arte.tv/de/videos/...
-output: rtmp://..
-usage: rtmpdump -r $(gema arteVideos <url>) -o fname
 	`,
 }
 
@@ -37,7 +32,11 @@ func findPlayerXml(url string) (string, error) {
 		// token type
 		tokenType := d.Next()
 		if tokenType == html.ErrorToken {
-			return "", errors.New("Error: Invalid HTML Token")
+			if err := d.Err(); err == io.EOF {
+				break
+			} else {
+				return "", fmt.Errorf("Error: Invalid HTML Token %s", err)
+			}
 		}
 		token := d.Token()
 		switch tokenType {
@@ -64,7 +63,7 @@ func findPlayerXml(url string) (string, error) {
 			}
 		}
 	}
-	return "", errors.New("Error: asPlayerXml-URL not found")
+	return "", fmt.Errorf("Error: asPlayerXml-URL not found")
 }
 
 func findStreamXml(url string) (string, error) {
@@ -98,7 +97,7 @@ func findStreamXml(url string) (string, error) {
 		}
 	}
 
-	return "", errors.New("Error: Stream XML-URL not found")
+	return "", fmt.Errorf("Error: Stream XML-URL not found")
 }
 
 func findStreamRtmp(url string) (string, error) {
@@ -130,7 +129,7 @@ func findStreamRtmp(url string) (string, error) {
 		}
 	}
 
-	return "", errors.New("Error: Stream XML-URL not found")
+	return "", fmt.Errorf("Error: Stream XML-URL not found")
 }
 
 func parseArteVideos(media *Mediathek, args []string) {

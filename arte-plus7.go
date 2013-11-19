@@ -3,9 +3,7 @@ package main
 import (
 	"code.google.com/p/go.net/html"
 	"encoding/json"
-	"errors"
 	"fmt"
-	// "log" // verbose
 	"net/http"
 	"strings"
 )
@@ -16,8 +14,6 @@ var mediaArtePlus7 = &Mediathek{
 	Short:     "helper for www.arte.tv/guide/...",
 	Long: `
 input: http://www.arte.tv/guide/de/sendungen/....
-outut: rtmp://..
-usage: rtmpdump -r $(gema arteP7 <url>) -o fname
 `,
 }
 
@@ -33,7 +29,11 @@ func findPlayerJson(url string) (string, error) {
 		// token type
 		tokenType := d.Next()
 		if tokenType == html.ErrorToken {
-			return "", errors.New("Error: Invalid HTML Token")
+			if err := d.Err(); err == io.EOF {
+				break
+			} else {
+				return "", fmt.Errorf("Error: Invalid HTML Token %s", err)
+			}
 		}
 		token := d.Token()
 		switch tokenType {
@@ -47,7 +47,7 @@ func findPlayerJson(url string) (string, error) {
 			}
 		}
 	}
-	return "", errors.New("Error: PlayerJson-URL not found")
+	return "", fmt.Errorf("Error: PlayerJson-URL not found")
 }
 
 func findPlus7RtmpUrl(url string) (string, error) {
@@ -93,7 +93,7 @@ func findPlus7RtmpUrl(url string) (string, error) {
 		// }
 	}
 
-	return "", errors.New("Error: rtmp-URL not found")
+	return "", fmt.Errorf("Error: rtmp-URL not found")
 }
 
 func parseArtePlus7(media *Mediathek, args []string) {

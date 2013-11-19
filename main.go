@@ -10,32 +10,32 @@ import (
 	"text/template"
 )
 
-// A Command is an implementation of a pshdl command
+// A Mediathek is an implementation of a mediathek-rtmp extractor
 // taken from https://code.google.com/p/go/source/browse/src/cmd/go/main.go
 type Mediathek struct {
-	// Run runs the command.
-	// The args are the arguments after the command name.
+	// Parse runs the parser
+	// The args are the arguments after the site name.
 	Parse func(cmd *Mediathek, args []string)
 
 	// UsageLine is the one-line usage message.
-	// The first word in the line is taken to be the command name.
+	// The first word in the line is taken to be the site name.
 	UsageLine string
 
-	// Short is the short description shown in the 'go help' output.
+	// Short is the short description shown in the 'gema help' output.
 	Short string
 
-	// Long is the long message shown in the 'go help <this-command>' output.
+	// Long is the long message shown in the 'gema help <this-command>' output.
 	Long string
 
-	// Flag is a set of flags specific to this command.
+	// Flag is a set of flags specific to this mediathek.
 	Flag flag.FlagSet
 
-	// CustomFlags indicates that the command will do its own
+	// CustomFlags indicates that the Mediathek will do its own
 	// flag parsing.
 	CustomFlags bool
 }
 
-// Name returns the command's name: the first word in the usage line.
+// Name returns the mediatheks's name: the first word in the usage line.
 func (m *Mediathek) Name() string {
 	name := m.UsageLine
 	i := strings.Index(name, " ")
@@ -51,7 +51,7 @@ func (m *Mediathek) Usage() {
 	os.Exit(2)
 }
 
-// Commands lists the available commands and help topics.
+// list of available mediatheken
 // The order here is the order in which they are printed by 'go help'.
 var mediatheken = []*Mediathek{
 	mediaArd,
@@ -96,12 +96,14 @@ func main() {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "gema: unkown subcommand %q\nRun 'gema help' for usage.\n", args[0])
+	fmt.Fprintf(os.Stderr, "gema: unkown media site %q\nRun 'gema help' for usage.\n", args[0])
 	setExitStatus(2)
 	exit()
 }
 
-var usageTemplate = `gema is a helper for extracting rtmp urls from media sites.
+var usageTemplate = `gib erstma alles (gema) is a helper for extracting rtmp urls from media sites.
+
+usually you run it like rtmpdump -r $(gema siteName url) -o filename.
 
 Usage:
 	gema siteName [arguments]
@@ -144,7 +146,7 @@ func help(args []string) {
 		return
 	}
 	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "usage: gema help command\n\nToo many arguments given.\n")
+		fmt.Fprintf(os.Stderr, "usage: gema help site\n\nToo many arguments given.\n")
 		os.Exit(2) // failed at 'go help'
 	}
 

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"html"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -35,14 +36,17 @@ func findPlayerJs(url string) (string, error) {
 		// token type
 		tokenType := d.Next()
 		if tokenType == htmpParser.ErrorToken {
-			return "", fmt.Errorf("Error: Invalid HTML Token")
+			if err := d.Err(); err == io.EOF {
+				break
+			} else {
+				return "", fmt.Errorf("Error: Invalid HTML Token %s", err)
+			}
 		}
 		token := d.Token()
 		switch tokenType {
 		case htmpParser.StartTagToken: // <tag>
 			switch {
 			case strings.HasPrefix(token.String(), "<div class"):
-				// fmt.Println(token.Attr)
 				for _, attr := range token.Attr {
 					if attr.Key == "class" && attr.Val == "mt-player_container" {
 						foundDiv = true
@@ -59,12 +63,12 @@ func findPlayerJs(url string) (string, error) {
 }
 
 // step 2 - eval js with our hooked v8
-var streamRegexp = regexp.MustCompile(`mediaCollection.addMediaStream\(0, 2, "(.+)", "(.+)", "default"\);`)
+var streamRegexp = regexp.MustCompile(`mediaCollection.addMediaStream\(0, 2, "(.*)", "(.*)",`)
 
 func findPlayPath(playerJs string) (*playPathArgs, error) {
 	matches := streamRegexp.FindStringSubmatch(playerJs)
 	if len(matches) != 3 {
-		return nil, fmt.Errorf("No Matches found..")
+		return nil, fmt.Errorf("No Matches found..\nMatches: %v\n", matches)
 	}
 	// fmt.Printf("Matches: %v\n")
 	return &playPathArgs{matches[1], matches[2]}, nil
@@ -89,5 +93,5 @@ func parseArd(media *Mediathek, args []string) {
 		exit()
 	}
 
-	fmt.Println(pPath.PlayPath)
+	fmt.Printf("%s%s\n", pPath.AppUrl, pPath.PlayPath)
 }
