@@ -54,6 +54,7 @@ func (m *Mediathek) Usage() {
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'go help'.
 var mediatheken = []*Mediathek{
+	mediaArd,
 	mediaZdf,
 	mediaArtePlus7,
 	mediaArteVideos,
@@ -78,11 +79,6 @@ func main() {
 	args := flag.Args()
 	if len(args) < 1 {
 		usage()
-	}
-
-	if args[0] == "help" {
-		help(args[1:])
-		return
 	}
 
 	for _, theken := range mediatheken {
