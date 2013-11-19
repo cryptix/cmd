@@ -81,7 +81,7 @@ func findStreamXml(url string) (string, error) {
 
 	xmlResp, err := http.Get(url)
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 	defer xmlResp.Body.Close()
 
@@ -113,7 +113,7 @@ func findStreamRtmp(url string) (string, error) {
 	}
 	rtmpXmlResp, err := http.Get(url)
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 	defer rtmpXmlResp.Body.Close()
 	xmlDecoder := xml.NewDecoder(rtmpXmlResp.Body)
@@ -140,21 +140,27 @@ func parseArteVideos(media *Mediathek, args []string) {
 
 	xmlUrl, err := findPlayerXml(args[0])
 	if err != nil {
-		panic(err.Error())
+		fmt.Printf("Error during findPlayerXml: %s\n", err)
+		setExitStatus(1)
+		exit()
 	}
 	// verbose
 	// log.Printf("PlayerXML URL:%s\n", xmlUrl)
 
 	streamXmlUrl, err := findStreamXml(xmlUrl)
 	if err != nil {
-		panic(err.Error())
+		fmt.Printf("Error during findStreamXml: %s\n", err)
+		setExitStatus(1)
+		exit()
 	}
 	// verbose
 	// log.Printf("StreamXML URL:%s\n", streamXmlUrl)
 
 	rtmpUrl, err := findStreamRtmp(streamXmlUrl)
 	if err != nil {
-		panic(err.Error())
+		fmt.Printf("Error during findStreamRtmp: %s\n", err)
+		setExitStatus(1)
+		exit()
 	}
 	// verbose
 	// log.Printf("Rtmp URL:%s\n", rtmpUrl)

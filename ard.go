@@ -26,7 +26,7 @@ func findPlayerJs(url string) (string, error) {
 	var foundDiv = false
 	plainHtmlResp, err := http.Get(url)
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 	defer plainHtmlResp.Body.Close()
 	d := htmpParser.NewTokenizer(plainHtmlResp.Body)

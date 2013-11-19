@@ -24,7 +24,7 @@ usage: rtmpdump -r $(gema arteP7 <url>) -o fname
 func findPlayerJson(url string) (string, error) {
 	plainHtmlResp, err := http.Get(url)
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 	defer plainHtmlResp.Body.Close()
 	d := html.NewTokenizer(plainHtmlResp.Body)
@@ -68,7 +68,7 @@ func findPlus7RtmpUrl(url string) (string, error) {
 	}
 	rtmpJsonResp, err := http.Get(url)
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 	defer rtmpJsonResp.Body.Close()
 	jsonDec := json.NewDecoder(rtmpJsonResp.Body)
@@ -103,14 +103,18 @@ func parseArtePlus7(media *Mediathek, args []string) {
 
 	jsonUrl, err := findPlayerJson(args[0])
 	if err != nil {
-		panic(err.Error())
+		fmt.Printf("Error during findPlayerJson: %s\n", err)
+		setExitStatus(1)
+		exit()
 	}
 	// verbose
 	// log.Printf("PlayerJson URL:%s\n", jsonUrl)
 
 	rtmpUrl, err := findPlus7RtmpUrl(jsonUrl)
 	if err != nil {
-		panic(err.Error())
+		fmt.Printf("Error during findPlus7RtmpUrl: %s\n", err)
+		setExitStatus(1)
+		exit()
 	}
 
 	fmt.Println(rtmpUrl)

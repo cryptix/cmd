@@ -43,7 +43,7 @@ func findMetaUrl(url string) (string, error) {
 
 	httpResp, err := http.Get(url)
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 	defer httpResp.Body.Close()
 
@@ -67,7 +67,7 @@ func findMetaUrl(url string) (string, error) {
 func findZdfRtmpUrl(url string) (string, error) {
 	httpResp, err := http.Get(url)
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 	defer httpResp.Body.Close()
 
@@ -98,15 +98,17 @@ func parseZdf(media *Mediathek, args []string) {
 	url := fmt.Sprintf("http://www.zdf.de/ZDFmediathek/xmlservice/web/beitragsDetails?id=%s", args[0])
 	metaUrl, err := findMetaUrl(url)
 	if err != nil {
-		panic(err.Error())
+		fmt.Printf("Error during findMetaUrl: %s\n", err)
+		setExitStatus(1)
+		exit()
 	}
-	// fmt.Printf("Meta Url:%s\n", metaUrl)
 
 	rtmpUrl, err := findZdfRtmpUrl(metaUrl)
 	if err != nil {
-		panic(err.Error())
+		fmt.Printf("Error during findZdfRtmpUrl: %s\n", err)
+		setExitStatus(1)
+		exit()
 	}
-	// fmt.Printf("RTMP Url:%s\n", rtmpUrl)
 
 	fmt.Println(rtmpUrl)
 }
