@@ -4,12 +4,15 @@ import (
 	"code.google.com/p/go.net/html"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
 var mediaArtePlus7 = &Mediathek{
 	Parse:     parseArtePlus7,
+	UrlRegexp: regexp.MustCompile("http://www.arte.tv/guide/"),
 	UsageLine: "arteP7 url",
 	Short:     "helper for www.arte.tv/guide/...",
 	Long: `
@@ -96,19 +99,13 @@ func findPlus7RtmpUrl(url string) (string, error) {
 	return "", fmt.Errorf("Error: rtmp-URL not found")
 }
 
-func parseArtePlus7(media *Mediathek, args []string) {
-	if len(args) == 0 {
-		media.Usage()
-	}
-
-	jsonUrl, err := findPlayerJson(args[0])
+func parseArtePlus7(media *Mediathek, url string) {
+	jsonUrl, err := findPlayerJson(url)
 	if err != nil {
 		fmt.Printf("Error during findPlayerJson: %s\n", err)
 		setExitStatus(1)
 		exit()
 	}
-	// verbose
-	// log.Printf("PlayerJson URL:%s\n", jsonUrl)
 
 	rtmpUrl, err := findPlus7RtmpUrl(jsonUrl)
 	if err != nil {

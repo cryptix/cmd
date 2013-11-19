@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"text/template"
@@ -15,7 +16,9 @@ import (
 type Mediathek struct {
 	// Parse runs the parser
 	// The args are the arguments after the site name.
-	Parse func(cmd *Mediathek, args []string)
+	Parse func(cmd *Mediathek, url string)
+
+	UrlRegexp *regexp.Regexp
 
 	// UsageLine is the one-line usage message.
 	// The first word in the line is taken to be the site name.
@@ -82,15 +85,10 @@ func main() {
 	}
 
 	for _, theken := range mediatheken {
-		if theken.Name() == args[0] && theken.Parse != nil {
+		if theken.UrlRegexp.MatchString(args[0]) {
 			theken.Flag.Usage = func() { theken.Usage() }
-			if theken.CustomFlags {
-				args = args[1:]
-			} else {
-				theken.Flag.Parse(args[1:])
-				args = theken.Flag.Args()
-			}
-			theken.Parse(theken, args)
+
+			theken.Parse(theken, args[0])
 			exit()
 			return
 		}

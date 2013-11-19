@@ -12,20 +12,23 @@ import (
 )
 
 var mediaArd = &Mediathek{
-	Parse:     parseArd,
+	Parse:     ardParse,
+	UrlRegexp: regexp.MustCompile(`http://www.ardmediathek.de/das-erste/.*\?documentId=(\d*)`),
 	UsageLine: "ard url",
 	Short:     "helper for www.ardmediathek.de/das-erste...",
 	Long:      `Todo`,
 }
+
+var streamRegexp = regexp.MustCompile(`mediaCollection.addMediaStream\(0, 2, "(.*)", "(.*)",`)
 
 type playPathArgs struct {
 	AppUrl, PlayPath string
 }
 
 // step 1 - get dynamic js code
-func findPlayerJs(url string) (string, error) {
+func ardFindPlayerJs(site string) (string, error) {
 	var foundDiv = false
-	plainHtmlResp, err := http.Get(url)
+	plainHtmlResp, err := http.Get(site)
 	if err != nil {
 		return "", err
 	}
@@ -62,10 +65,8 @@ func findPlayerJs(url string) (string, error) {
 	return "", fmt.Errorf("Error: Player JS not found")
 }
 
-// step 2 - eval js with our hooked v8
-var streamRegexp = regexp.MustCompile(`mediaCollection.addMediaStream\(0, 2, "(.*)", "(.*)",`)
-
-func findPlayPath(playerJs string) (*playPathArgs, error) {
+// step 2 - find rtmpurl with regexp
+func ardFindPlayPath(playerJs string) (*playPathArgs, error) {
 	matches := streamRegexp.FindStringSubmatch(playerJs)
 	if len(matches) != 3 {
 		return nil, fmt.Errorf("No Matches found..\nMatches: %v\n", matches)
@@ -74,21 +75,17 @@ func findPlayPath(playerJs string) (*playPathArgs, error) {
 	return &playPathArgs{matches[1], matches[2]}, nil
 }
 
-func parseArd(media *Mediathek, args []string) {
-	if len(args) == 0 {
-		media.Usage()
-	}
-
-	playerJs, err := findPlayerJs(args[0])
+func ardParse(media *Mediathek, url string) {
+	playerJs, err := ardFindPlayerJs(url)
 	if err != nil {
-		fmt.Printf("Error during findPlayerJs: %s\n", err)
+		fmt.Printf("Error during ardFindPlayerJs: %s\n", err)
 		setExitStatus(1)
 		exit()
 	}
 
-	pPath, err := findPlayPath(playerJs)
+	pPath, err := ardFindPlayPath(playerJs)
 	if err != nil {
-		fmt.Printf("Error during findPlayPath: %s\n", err)
+		fmt.Printf("Error during ardFindPlayPath: %s\n", err)
 		setExitStatus(1)
 		exit()
 	}

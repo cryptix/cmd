@@ -1,7 +1,5 @@
 package main
 
-// http://www.zdf.de/ZDFmediathek/xmlservice/web/beitragsDetails?id=$1 | grep -A2 h264_aac_mp4_rtmp_zdfmeta_http | grep -A1 veryhigh | grep url | cut -d\> -f2 | cut -d\< -f 1)
-
 import (
 	"encoding/xml"
 	"fmt"
@@ -11,7 +9,8 @@ import (
 )
 
 var mediaZdf = &Mediathek{
-	Parse:     parseZdf,
+	Parse:     zdfParse,
+	UrlRegexp: regexp.MustCompile(`http://[w\.]*zdf.de/ZDFmediathek/beitrag/video/([\d]+)/`),
 	UsageLine: "zdf contentId",
 	Short:     "helper for www.zdf.de/ZDFmediathek/..",
 	Long: `
@@ -19,7 +18,7 @@ input: http://zdf.de/ZDFmediathek/beitrag/video/....
 `,
 }
 
-func findMetaUrl(url string) (string, error) {
+func zdfFindMetaUrl(url string) (string, error) {
 
 	type zdfTeaserimage struct {
 		Alt   string `xml:"alt,attr"`
@@ -67,7 +66,7 @@ func findMetaUrl(url string) (string, error) {
 	return "", fmt.Errorf("Error: Meta XML-URL not found")
 }
 
-func findZdfRtmpUrl(url string) (string, error) {
+func zdfFindZdfRtmpUrl(url string) (string, error) {
 	httpResp, err := http.Get(url)
 	if err != nil {
 		return "", err
@@ -93,32 +92,26 @@ func findZdfRtmpUrl(url string) (string, error) {
 	return "", fmt.Errorf("Error: RTMP-URL not found")
 }
 
-var correctUrl = regexp.MustCompile(`http://zdf.de/ZDFmediathek/beitrag/video/([\d]+)/`)
-
-func parseZdf(media *Mediathek, args []string) {
-	if len(args) == 0 {
-		media.Usage()
-	}
-
-	idMatch := correctUrl.FindStringSubmatch(args[0])
+func zdfParse(media *Mediathek, url string) {
+	idMatch := media.UrlRegexp.FindStringSubmatch(url)
 	if len(idMatch) != 2 {
 		fmt.Println("Not a valid ZDFmediathek url.")
 		setExitStatus(1)
 		exit()
 	}
-	fmt.Printf("Id found:%s\n", idMatch[1])
+	// fmt.Printf("Id found:%s\n", idMatch[1])
 
-	url := fmt.Sprintf("http://www.zdf.de/ZDFmediathek/xmlservice/web/beitragsDetails?id=%s", idMatch[1])
-	metaUrl, err := findMetaUrl(url)
+	url = fmt.Sprintf("http://www.zdf.de/ZDFmediathek/xmlservice/web/beitragsDetails?id=%s", idMatch[1])
+	metaUrl, err := zdfFindMetaUrl(url)
 	if err != nil {
-		fmt.Printf("Error during findMetaUrl: %s\n", err)
+		fmt.Printf("Error during zdfFindMetaUrl: %s\n", err)
 		setExitStatus(1)
 		exit()
 	}
 
-	rtmpUrl, err := findZdfRtmpUrl(metaUrl)
+	rtmpUrl, err := zdfFindZdfRtmpUrl(metaUrl)
 	if err != nil {
-		fmt.Printf("Error during findZdfRtmpUrl: %s\n", err)
+		fmt.Printf("Error during zdfFindZdfRtmpUrl: %s\n", err)
 		setExitStatus(1)
 		exit()
 	}

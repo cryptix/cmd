@@ -4,13 +4,15 @@ import (
 	"code.google.com/p/go.net/html"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
 )
 
 var mediaArteVideos = &Mediathek{
-	Parse:     parseArteVideos,
+	Parse:     arteVideosParse,
+	UrlRegexp: regexp.MustCompile("http://www.videos.arte.tv/de/videos/"),
 	UsageLine: "arteVideos url",
 	Short:     "helper for videos.arte.tv",
 	Long: `
@@ -18,7 +20,7 @@ input: http://videos.arte.tv/de/videos/...
 	`,
 }
 
-func findPlayerXml(url string) (string, error) {
+func arteVideosFindPlayerXml(url string) (string, error) {
 	httpMatcher := regexp.MustCompile("http://.*Xml.xml")
 	plainHtmlResp, err := http.Get(url)
 	if err != nil {
@@ -66,7 +68,7 @@ func findPlayerXml(url string) (string, error) {
 	return "", fmt.Errorf("Error: asPlayerXml-URL not found")
 }
 
-func findStreamXml(url string) (string, error) {
+func arteVideosFindStreamXml(url string) (string, error) {
 	type Video struct {
 		Lang string `xml:"lang,attr"`
 		Ref  string `xml:"ref,attr"`
@@ -100,7 +102,7 @@ func findStreamXml(url string) (string, error) {
 	return "", fmt.Errorf("Error: Stream XML-URL not found")
 }
 
-func findStreamRtmp(url string) (string, error) {
+func arteVideosFindStreamRtmp(url string) (string, error) {
 	type Url struct {
 		Quality string `xml:"quality,attr"`
 		Address string `xml:",innerxml"`
@@ -132,32 +134,28 @@ func findStreamRtmp(url string) (string, error) {
 	return "", fmt.Errorf("Error: Stream XML-URL not found")
 }
 
-func parseArteVideos(media *Mediathek, args []string) {
-	if len(args) != 2 {
-		media.Usage()
-	}
-
-	xmlUrl, err := findPlayerXml(args[0])
+func arteVideosParse(media *Mediathek, url string) {
+	xmlUrl, err := arteVideosFindPlayerXml(url)
 	if err != nil {
-		fmt.Printf("Error during findPlayerXml: %s\n", err)
+		fmt.Printf("Error during arteVideosFindPlayerXml: %s\n", err)
 		setExitStatus(1)
 		exit()
 	}
 	// verbose
 	// log.Printf("PlayerXML URL:%s\n", xmlUrl)
 
-	streamXmlUrl, err := findStreamXml(xmlUrl)
+	streamXmlUrl, err := arteVideosFindStreamXml(xmlUrl)
 	if err != nil {
-		fmt.Printf("Error during findStreamXml: %s\n", err)
+		fmt.Printf("Error during arteVideosFindStreamXml: %s\n", err)
 		setExitStatus(1)
 		exit()
 	}
 	// verbose
 	// log.Printf("StreamXML URL:%s\n", streamXmlUrl)
 
-	rtmpUrl, err := findStreamRtmp(streamXmlUrl)
+	rtmpUrl, err := arteVideosFindStreamRtmp(streamXmlUrl)
 	if err != nil {
-		fmt.Printf("Error during findStreamRtmp: %s\n", err)
+		fmt.Printf("Error during arteVideosFindStreamRtmp: %s\n", err)
 		setExitStatus(1)
 		exit()
 	}
