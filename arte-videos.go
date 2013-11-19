@@ -1,20 +1,27 @@
 package main
 
-// input: http://videos.arte.tv/de/videos/...
-// output: rtmp://..
-// usage: rtmpdump -r $(gema-arte-videos <url>) -o fname
-
 import (
 	"code.google.com/p/go.net/html"
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"os"
+
 	// "log" // verbose
 	"net/http"
 	"regexp"
 	"strings"
 )
+
+var mediaArteVideos = &Mediathek{
+	Parse:     parseArteVideos,
+	UsageLine: "arteVideos url",
+	Short:     "helper for videos.arte.tv",
+	Long: `
+input: http://videos.arte.tv/de/videos/...
+output: rtmp://..
+usage: rtmpdump -r $(gema arteVideos <url>) -o fname
+	`,
+}
 
 func findPlayerXml(url string) (string, error) {
 	httpMatcher := regexp.MustCompile("http://.*Xml.xml")
@@ -126,13 +133,12 @@ func findStreamRtmp(url string) (string, error) {
 	return "", errors.New("Error: Stream XML-URL not found")
 }
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <arte url>\n", os.Args[0])
-		os.Exit(1)
+func parseArteVideos(media *Mediathek, args []string) {
+	if len(args) != 2 {
+		media.Usage()
 	}
 
-	xmlUrl, err := findPlayerXml(os.Args[1])
+	xmlUrl, err := findPlayerXml(args[0])
 	if err != nil {
 		panic(err.Error())
 	}

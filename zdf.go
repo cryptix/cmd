@@ -4,12 +4,17 @@ package main
 
 import (
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 )
+
+var mediaZdf = &Mediathek{
+	Parse:     parseZdf,
+	UsageLine: "zdf contentId",
+	Short:     "helper for www.zdf.de/ZDFmediathek/..",
+	Long:      `Todo`,
+}
 
 func findMetaUrl(url string) (string, error) {
 
@@ -56,10 +61,10 @@ func findMetaUrl(url string) (string, error) {
 		}
 	}
 
-	return "", errors.New("Error: Meta XML-URL not found")
+	return "", fmt.Errorf("Error: Meta XML-URL not found")
 }
 
-func findRtmpUrl(url string) (string, error) {
+func findZdfRtmpUrl(url string) (string, error) {
 	httpResp, err := http.Get(url)
 	if err != nil {
 		panic(err.Error())
@@ -82,28 +87,26 @@ func findRtmpUrl(url string) (string, error) {
 		return decodedResponse.StreamUrl, nil
 	}
 
-	return "", errors.New("Error: RTMP-URL not found")
+	return "", fmt.Errorf("Error: RTMP-URL not found")
 }
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <zdf mediathek id>\n", os.Args[0])
-		os.Exit(1)
+func parseZdf(media *Mediathek, args []string) {
+	if len(args) == 0 {
+		media.Usage()
 	}
 
-	url := fmt.Sprintf("http://www.zdf.de/ZDFmediathek/xmlservice/web/beitragsDetails?id=%s", os.Args[1])
+	url := fmt.Sprintf("http://www.zdf.de/ZDFmediathek/xmlservice/web/beitragsDetails?id=%s", args[0])
 	metaUrl, err := findMetaUrl(url)
 	if err != nil {
 		panic(err.Error())
 	}
 	// fmt.Printf("Meta Url:%s\n", metaUrl)
 
-	rtmpUrl, err := findRtmpUrl(metaUrl)
+	rtmpUrl, err := findZdfRtmpUrl(metaUrl)
 	if err != nil {
 		panic(err.Error())
 	}
 	// fmt.Printf("RTMP Url:%s\n", rtmpUrl)
 
 	fmt.Println(rtmpUrl)
-
 }

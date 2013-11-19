@@ -1,9 +1,5 @@
 package main
 
-// input: http://www.arte.tv/guide/de/sendungen/....
-// outut: rtmp://..
-// usage: rtmpdump -r $(gema-arte-plus7 <url>) -o fname
-
 import (
 	"code.google.com/p/go.net/html"
 	"encoding/json"
@@ -11,9 +7,19 @@ import (
 	"fmt"
 	// "log" // verbose
 	"net/http"
-	"os"
 	"strings"
 )
+
+var mediaArtePlus7 = &Mediathek{
+	Parse:     parseArtePlus7,
+	UsageLine: "arteP7 url",
+	Short:     "helper for www.arte.tv/guide/...",
+	Long: `
+input: http://www.arte.tv/guide/de/sendungen/....
+outut: rtmp://..
+usage: rtmpdump -r $(gema arteP7 <url>) -o fname
+`,
+}
 
 func findPlayerJson(url string) (string, error) {
 	plainHtmlResp, err := http.Get(url)
@@ -44,7 +50,7 @@ func findPlayerJson(url string) (string, error) {
 	return "", errors.New("Error: PlayerJson-URL not found")
 }
 
-func findRtmpUrl(url string) (string, error) {
+func findPlus7RtmpUrl(url string) (string, error) {
 	// http://jsonviewer.stack.hu/#http://arte.tv/papi/tvguide/videos/stream/player/D/040347-001_PLUS7-D/ALL/ALL.json
 	type Stream struct {
 		Host string `json:"streamer"`
@@ -90,20 +96,19 @@ func findRtmpUrl(url string) (string, error) {
 	return "", errors.New("Error: rtmp-URL not found")
 }
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <arte url>\n", os.Args[0])
-		os.Exit(1)
+func parseArtePlus7(media *Mediathek, args []string) {
+	if len(args) == 0 {
+		media.Usage()
 	}
 
-	jsonUrl, err := findPlayerJson(os.Args[1])
+	jsonUrl, err := findPlayerJson(args[0])
 	if err != nil {
 		panic(err.Error())
 	}
 	// verbose
 	// log.Printf("PlayerJson URL:%s\n", jsonUrl)
 
-	rtmpUrl, err := findRtmpUrl(jsonUrl)
+	rtmpUrl, err := findPlus7RtmpUrl(jsonUrl)
 	if err != nil {
 		panic(err.Error())
 	}
