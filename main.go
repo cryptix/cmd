@@ -84,6 +84,11 @@ func main() {
 		usage()
 	}
 
+	if args[0] == "help" {
+		help(args[1:])
+		return
+	}
+
 	for _, theken := range mediatheken {
 		if theken.UrlRegexp.MatchString(args[0]) {
 			theken.Flag.Usage = func() { theken.Usage() }
