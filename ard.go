@@ -13,7 +13,7 @@ import (
 
 var mediaArd = &Mediathek{
 	Parse:     ardParse,
-	UrlRegexp: regexp.MustCompile(`http://www.ardmediathek.de/das-erste/.*\?documentId=(\d*)`),
+	UrlRegexp: regexp.MustCompile(`http://www.ardmediathek.de/.*\?documentId=(\d*)`),
 	UsageLine: "ard url",
 	Short:     "helper for www.ardmediathek.de/das-erste...",
 	Long:      `Todo`,
