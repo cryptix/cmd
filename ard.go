@@ -13,7 +13,7 @@ import (
 
 var mediaArd = &Mediathek{
 	Parse:     ardParse,
-	UrlRegexp: regexp.MustCompile(`http://www.ardmediathek.de/.*\?documentId=(\d*)`),
+	UrlRegexp: regexp.MustCompile(`http://mediathek.daserste.de/`),
 	UsageLine: "ard url",
 	Short:     "helper for www.ardmediathek.de/das-erste...",
 	Long:      `Todo`,
@@ -26,9 +26,9 @@ type playPathArgs struct {
 }
 
 // step 1 - get dynamic js code
-func ardFindPlayerJs(site string) (string, error) {
-	var foundDiv = false
-	plainHtmlResp, err := http.Get(site)
+func ardFindPlayPath(url string) (string, error) {
+	var foundTag = false
+	plainHtmlResp, err := http.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -48,47 +48,30 @@ func ardFindPlayerJs(site string) (string, error) {
 		token := d.Token()
 		switch tokenType {
 		case htmpParser.StartTagToken: // <tag>
-			switch {
-			case strings.HasPrefix(token.String(), "<div class"):
-				for _, attr := range token.Attr {
-					if attr.Key == "class" && attr.Val == "mt-player_container" {
-						foundDiv = true
-					}
-				}
+			if strings.HasPrefix(token.String(), "<script type=\"text/javascript\"") {
+				foundTag = true
 			}
 		case htmpParser.TextToken:
-			if foundDiv == true {
-				return html.UnescapeString(token.String()), nil
+			if foundTag == true {
+				body := html.UnescapeString(token.String())
+				matches := streamRegexp.FindStringSubmatch(body)
+				if len(matches) == 3 {
+					return fmt.Sprintf("%s%s\n", matches[1], matches[2]), nil
+				}
+				foundTag = false
 			}
 		}
 	}
 	return "", fmt.Errorf("Error: Player JS not found")
 }
 
-// step 2 - find rtmpurl with regexp
-func ardFindPlayPath(playerJs string) (*playPathArgs, error) {
-	matches := streamRegexp.FindStringSubmatch(playerJs)
-	if len(matches) != 3 {
-		return nil, fmt.Errorf("No Matches found..\nMatches: %v\n", matches)
-	}
-	// fmt.Printf("Matches: %v\n")
-	return &playPathArgs{matches[1], matches[2]}, nil
-}
-
 func ardParse(media *Mediathek, url string) {
-	playerJs, err := ardFindPlayerJs(url)
+	pPath, err := ardFindPlayPath(url)
 	if err != nil {
 		fmt.Printf("Error during ardFindPlayerJs: %s\n", err)
 		setExitStatus(1)
 		exit()
 	}
 
-	pPath, err := ardFindPlayPath(playerJs)
-	if err != nil {
-		fmt.Printf("Error during ardFindPlayPath: %s\n", err)
-		setExitStatus(1)
-		exit()
-	}
-
-	fmt.Printf("%s%s\n", pPath.AppUrl, pPath.PlayPath)
+	fmt.Println(pPath)
 }
