@@ -13,11 +13,22 @@ const listTemplateText = `
 </form>
 
 <h1>List of files</h1>
-<ul>
+<table>
+<thead>
+	<tr>
+		<td>Name</td>
+		<td>Size</td>
+	</tr>
+</thead>
+<tbody>
 {{range .}}
-<li><a href="/{{.Name}}">{{.Name}}</a></li>
+<tr>
+	<td><a href="/{{.Name}}">{{.Name}}</a></td>
+	<td>{{.Size}} Bytes</td>
+</tr>
 {{end}}
-</ul>
+</tbody>
+</table>
 
 <h1>Zip of all files</h1>
 <a href="/downloadAll">Download</a>
