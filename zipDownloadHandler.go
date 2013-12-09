@@ -1,0 +1,68 @@
+package main
+
+import (
+	"archive/zip"
+	"bytes"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+)
+
+func zipDownloadHandler(resp http.ResponseWriter, req *http.Request) {
+	dir, err := os.Open(dumpDir)
+	if err != nil {
+		http.Error(resp, err.Error(), http.StatusInternalServerError)
+		fmt.Fprintf(os.Stderr, "listHandler - os.Open(dumpDir) - Error: %v\n", err)
+		return
+	}
+
+	fileInfos, err := dir.Readdir(-1)
+	if err != nil {
+		http.Error(resp, err.Error(), http.StatusInternalServerError)
+		fmt.Fprintf(os.Stderr, "listHandler - dir.Readdir - Error: %v\n", err)
+		return
+	}
+
+	buf := new(bytes.Buffer)
+	zipWriter := zip.NewWriter(buf)
+
+	for _, fInfo := range fileInfos {
+		if fInfo.IsDir() {
+			continue
+		}
+
+		rawFile, err := os.Open(filepath.Join(dumpDir, fInfo.Name()))
+		if err != nil {
+			http.Error(resp, err.Error(), http.StatusInternalServerError)
+			fmt.Fprintf(os.Stderr, "listHandler - os.Open(zipFile) - Error: %v\n", err)
+			return
+		}
+
+		zipFile, err := zipWriter.Create(fInfo.Name())
+		if err != nil {
+			http.Error(resp, err.Error(), http.StatusInternalServerError)
+			fmt.Fprintf(os.Stderr, "listHandler - zipWriter.Create - Error: %v\n", err)
+			return
+		}
+
+		io.Copy(zipFile, rawFile)
+	}
+
+	err = zipWriter.Close()
+	if err != nil {
+		http.Error(resp, err.Error(), http.StatusInternalServerError)
+		fmt.Fprintf(os.Stderr, "listHandler - zipWriter.Close - Error: %v\n", err)
+		return
+	}
+
+	resp.Header().Set("Content-Description", "File Transfer")
+	resp.Header().Set("Content-type", "application/octet-stream")
+	resp.Header().Set("Content-Disposition", "attachment; filename=files.zip")
+	resp.Header().Set("Content-Transfer-Encoding", "binary")
+	resp.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+
+	io.Copy(resp, buf)
+}
