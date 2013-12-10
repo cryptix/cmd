@@ -2,13 +2,11 @@ package main
 
 import (
 	"archive/zip"
-	"bytes"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 )
 
 func zipDownloadHandler(resp http.ResponseWriter, req *http.Request, log *log.Logger) {
@@ -26,8 +24,13 @@ func zipDownloadHandler(resp http.ResponseWriter, req *http.Request, log *log.Lo
 		return
 	}
 
-	buf := new(bytes.Buffer)
-	zipWriter := zip.NewWriter(buf)
+	resp.WriteHeader(http.StatusOK)
+	resp.Header().Set("Content-Description", "File Transfer")
+	resp.Header().Set("Content-type", "application/octet-stream")
+	resp.Header().Set("Content-Disposition", "attachment; filename=files.zip")
+	resp.Header().Set("Content-Transfer-Encoding", "binary")
+
+	zipWriter := zip.NewWriter(resp)
 
 	for _, fInfo := range fileInfos {
 		if fInfo.IsDir() {
@@ -59,13 +62,5 @@ func zipDownloadHandler(resp http.ResponseWriter, req *http.Request, log *log.Lo
 		return
 	}
 
-	resp.WriteHeader(http.StatusOK)
-	resp.Header().Set("Content-Description", "File Transfer")
-	resp.Header().Set("Content-type", "application/octet-stream")
-	resp.Header().Set("Content-Disposition", "attachment; filename=files.zip")
-	resp.Header().Set("Content-Transfer-Encoding", "binary")
-	resp.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-
-	io.Copy(resp, buf)
 	log.Println("Served .zip File")
 }
