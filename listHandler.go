@@ -24,10 +24,13 @@ const listTemplateText = `
 </thead>
 <tbody>
 {{range .}}
+{{if .IsDir}}
+{{else}}
 <tr>
 	<td><a href="/{{.Name}}">{{.Name}}</a></td>
 	<td>{{.Size}} Bytes</td>
 </tr>
+{{end}}
 {{end}}
 </tbody>
 </table>
