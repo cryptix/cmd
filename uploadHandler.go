@@ -18,7 +18,7 @@ func uploadHandler(resp http.ResponseWriter, req *http.Request, log *log.Logger)
 		return
 	}
 
-	input, err := os.Create(filepath.Join(dumpDir, header.Filename))
+	input, err := os.Create(filepath.Join(*dumpDir, header.Filename))
 	if err != nil {
 		http.Error(resp, err.Error(), http.StatusInternalServerError)
 		log.Printf("uploadHandler - os.Open - Error: %v\n", err)

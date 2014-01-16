@@ -10,7 +10,7 @@ import (
 )
 
 func zipDownloadHandler(resp http.ResponseWriter, req *http.Request, log *log.Logger) {
-	dir, err := os.Open(dumpDir)
+	dir, err := os.Open(*dumpDir)
 	if err != nil {
 		http.Error(resp, err.Error(), http.StatusInternalServerError)
 		log.Printf("listHandler - os.Open(dumpDir) - Error: %v\n", err)
@@ -37,7 +37,7 @@ func zipDownloadHandler(resp http.ResponseWriter, req *http.Request, log *log.Lo
 			continue
 		}
 
-		rawFile, err := os.Open(filepath.Join(dumpDir, fInfo.Name()))
+		rawFile, err := os.Open(filepath.Join(*dumpDir, fInfo.Name()))
 		if err != nil {
 			http.Error(resp, err.Error(), http.StatusInternalServerError)
 			log.Printf("listHandler - os.Open(zipFile) - Error: %v\n", err)

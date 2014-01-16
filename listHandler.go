@@ -39,7 +39,7 @@ const listTemplateText = `
 var listTemplate = template.Must(template.New("listTemplate").Parse(listTemplateText))
 
 func listHandler(resp http.ResponseWriter, req *http.Request, log *log.Logger) {
-	dir, err := os.Open(dumpDir)
+	dir, err := os.Open(*dumpDir)
 	if err != nil {
 		http.Error(resp, err.Error(), http.StatusInternalServerError)
 		log.Printf("listHandler - os.Open - Error: %v\n", err)
