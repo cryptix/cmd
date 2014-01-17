@@ -8,9 +8,9 @@ import (
 	"log"
 	"os"
 	"path"
-	"time"
 
 	"code.google.com/p/bencode-go"
+	"github.com/cheggaaa/pb"
 )
 
 // currently only single file
@@ -19,7 +19,7 @@ type torrentFileSpec struct {
 	Info     struct {
 		Name     string
 		Length   int
-		PieceLen int64 `piece length`
+		PieceLen int `piece length`
 		Pieces   string
 	}
 }
@@ -52,15 +52,17 @@ func main() {
 	defer ffile.Close()
 	fmt.Println("Checking file:", fname)
 
-	progChan := startProgressPrinter()
+	finfo, err := os.Stat(fname)
+	checkErr(err)
+
+	bar := pb.New(int(finfo.Size())).SetUnits(pb.U_BYTES)
+	bar.Start()
 
 	// iterate over the Peices string which contains the hash values
-	for i := int64(0); i < tdata.Info.PieceLen; i += 20 {
-		progChan <- i
-
+	for i := 0; i < tdata.Info.PieceLen; i += 20 {
 		hasher := sha1.New()
 
-		n, err := io.CopyN(hasher, ffile, tdata.Info.PieceLen)
+		n, err := io.CopyN(io.MultiWriter(hasher, bar), ffile, int64(tdata.Info.PieceLen))
 
 		// break the for loop if we copied all the bytes from the file
 		if err == io.EOF {
@@ -73,7 +75,7 @@ func main() {
 		}
 
 		// check if the copied amount was correct
-		if n != tdata.Info.PieceLen {
+		if int(n) != tdata.Info.PieceLen {
 			fmt.Fprintf(os.Stderr, "Error: .Read() wrote the wrong amount\nn != tdata.Info.PieceLen=> %d != %d\n", n, tdata.Info.PieceLen)
 			os.Exit(2)
 		}
@@ -86,7 +88,7 @@ func main() {
 		}
 	}
 
-	fmt.Println("Check complete, no errors!")
+	bar.FinishPrint("Check complete, no errors!")
 	os.Exit(0)
 }
 
@@ -95,29 +97,4 @@ func checkErr(err error) {
 		fmt.Fprintf(os.Stderr, "Errror: %s\n", err)
 		os.Exit(2)
 	}
-}
-
-func startProgressPrinter() chan<- int64 {
-
-	progChan := make(chan int64)
-	var current int64
-	total := tdata.Info.PieceLen
-
-	go func() {
-		for i := range progChan {
-			current = i
-		}
-	}()
-
-	go func() {
-		for {
-			select {
-			case <-time.After(time.Second * 2):
-				percDone := 100 * float64(current) / float64(total)
-				fmt.Printf("\rTick... %3.2f%% (%d/%d)", percDone, current, total)
-			}
-		}
-	}()
-
-	return progChan
 }
