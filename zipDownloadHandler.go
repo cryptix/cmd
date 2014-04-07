@@ -24,11 +24,11 @@ func zipDownloadHandler(resp http.ResponseWriter, req *http.Request, log *log.Lo
 		return
 	}
 
-	resp.WriteHeader(http.StatusOK)
 	resp.Header().Set("Content-Description", "File Transfer")
 	resp.Header().Set("Content-type", "application/octet-stream")
 	resp.Header().Set("Content-Disposition", "attachment; filename=files.zip")
 	resp.Header().Set("Content-Transfer-Encoding", "binary")
+	resp.WriteHeader(http.StatusOK)
 
 	zipWriter := zip.NewWriter(resp)
 

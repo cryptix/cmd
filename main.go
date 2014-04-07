@@ -25,7 +25,9 @@ func main() {
 	m.Get("/downloadAll", zipDownloadHandler)
 	m.Post("/upload", uploadHandler)
 
-	err := http.ListenAndServe(fmt.Sprintf("%s:%d", *host, +*port), m)
+	addr := fmt.Sprintf("%s:%d", *host, *port)
+	fmt.Println("Listening on", addr)
+	err := http.ListenAndServe(addr, m)
 	if err != nil {
 		fmt.Println(err)
 	}
