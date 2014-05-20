@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 )
 
-func zipDownloadHandler(resp http.ResponseWriter, req *http.Request, log *log.Logger) {
+func zipDownloadHandler(resp http.ResponseWriter, req *http.Request) {
 	dir, err := os.Open(*dumpDir)
 	if err != nil {
 		http.Error(resp, err.Error(), http.StatusInternalServerError)

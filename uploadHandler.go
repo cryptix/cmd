@@ -10,7 +10,7 @@ import (
 
 const maxSize = 1024 * 1024 * 5
 
-func uploadHandler(resp http.ResponseWriter, req *http.Request, log *log.Logger) {
+func uploadHandler(resp http.ResponseWriter, req *http.Request) {
 	file, header, err := req.FormFile("fupload")
 	if err != nil {
 		http.Error(resp, err.Error(), http.StatusInternalServerError)

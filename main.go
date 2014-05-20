@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/codegangsta/martini"
+	"github.com/codegangsta/negroni"
 )
 
 var (
@@ -17,18 +17,17 @@ var (
 func main() {
 	flag.Parse()
 
-	m := martini.Classic()
+	mux := http.NewServeMux()
 
-	m.Use(martini.Static(*dumpDir))
+	mux.HandleFunc("/", listHandler)
+	mux.HandleFunc("/downloadAll", zipDownloadHandler)
+	mux.HandleFunc("/upload", uploadHandler)
 
-	m.Get("/", listHandler)
-	m.Get("/downloadAll", zipDownloadHandler)
-	m.Post("/upload", uploadHandler)
+	n := negroni.Classic()
+	n.Use(negroni.NewStatic(http.Dir(*dumpDir)))
+	n.UseHandler(mux)
 
 	addr := fmt.Sprintf("%s:%d", *host, *port)
-	fmt.Println("Listening on", addr)
-	err := http.ListenAndServe(addr, m)
-	if err != nil {
-		fmt.Println(err)
-	}
+	n.Run(addr)
+
 }
