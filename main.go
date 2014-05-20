@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	host    = flag.String("host", "localhost", "The hostname/ip to listen on.")
+	host    = flag.String("host", "", "The hostname/ip to listen on.")
 	port    = flag.Int("port", 3000, "The port number to listen on.")
-	dumpDir = flag.String("dir", "files", "The directory used to store and serve files")
+	dumpDir = flag.String("dir", ".", "The directory used to store and serve files")
 )
 
 func main() {
