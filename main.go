@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/ioutil"
 	"log"
 	"os"
 	"time"
@@ -14,6 +15,9 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "influxUsage"
 	app.Usage = "Sends usage reports to influxdb"
+	app.Flags = []cli.Flag{
+		cli.BoolFlag{"verbose,vv", "print gathered stats to stderr"},
+	}
 	app.Action = run
 
 	app.Run(os.Args)
@@ -21,6 +25,10 @@ func main() {
 
 func run(ctx *cli.Context) {
 	var err error
+	log.SetOutput(ioutil.Discard)
+	if ctx.Bool("verbose") {
+		log.SetOutput(os.Stderr)
+	}
 
 	// sigar variables
 	var (
