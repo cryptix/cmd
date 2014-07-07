@@ -90,7 +90,7 @@ func run(ctx *cli.Context) {
 			Name:    "DiskSpace",
 			Columns: []string{"System", "Total", "Used", "Free"},
 			Points: [][]interface{}{
-				{"planc", diskspace.Total, diskspace.Used, diskspace.Free},
+				{"planc", diskspace.Total * 1024, diskspace.Used * 1024, diskspace.Free * 1024},
 			},
 		})
 		log.Printf("df/: %4s %4s %4s %4s\n",
