@@ -8,15 +8,13 @@ import (
 	"github.com/influxdb/influxdb-go"
 )
 
-type Serieses []*influxdb.Series
-
-func CollectMemory(schan chan<- Serieses, sleepLen time.Duration) {
+func CollectMemory(schan chan<- serieses, sleepLen time.Duration) {
 	var (
 		mem  sigar.Mem
 		swap sigar.Swap
 	)
 
-	serieses := make(Serieses, 2)
+	serieses := make(serieses, 2)
 
 	for {
 		// ram
@@ -47,12 +45,12 @@ func CollectMemory(schan chan<- Serieses, sleepLen time.Duration) {
 
 }
 
-func CollectDiskSpace(schan chan<- Serieses, sleepLen time.Duration, path string) {
+func CollectDiskSpace(schan chan<- serieses, sleepLen time.Duration, path string) {
 	var diskspace sigar.FileSystemUsage
 
 	for {
 		checkFatal(diskspace.Get(path))
-		schan <- Serieses{
+		schan <- serieses{
 			&influxdb.Series{
 				Name:    "DiskSpace",
 				Columns: []string{"System", "Total", "Used", "Free"},
@@ -73,12 +71,12 @@ func CollectDiskSpace(schan chan<- Serieses, sleepLen time.Duration, path string
 	}
 }
 
-func CollectCPULoad(schan chan<- Serieses, sleepLen time.Duration) {
+func CollectCPULoad(schan chan<- serieses, sleepLen time.Duration) {
 	var avg sigar.LoadAverage
 
 	for {
 		checkFatal(avg.Get())
-		schan <- Serieses{
+		schan <- serieses{
 			&influxdb.Series{
 				Name:    "Load",
 				Columns: []string{"System", "One", "Five", "Fifteen"},

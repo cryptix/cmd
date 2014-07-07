@@ -2,7 +2,9 @@ package main
 
 import "github.com/influxdb/influxdb-go"
 
-func NewInfluxCollector(dbCfg *influxdb.ClientConfig) (chan<- Serieses, error) {
+type serieses []*influxdb.Series
+
+func NewInfluxCollector(dbCfg *influxdb.ClientConfig) (chan<- serieses, error) {
 	var (
 		err error
 		db  *influxdb.Client
@@ -15,7 +17,7 @@ func NewInfluxCollector(dbCfg *influxdb.ClientConfig) (chan<- Serieses, error) {
 		return nil, err
 	}
 
-	seriesChan := make(chan Serieses)
+	seriesChan := make(chan serieses)
 
 	// start a goroutine that sends to influxdb
 	go func() {
