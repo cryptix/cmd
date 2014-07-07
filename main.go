@@ -20,6 +20,7 @@ func main() {
 	app.Action = run
 
 	app.Flags = []cli.Flag{
+		cli.StringFlag{"host", "127.0.0.1:8086", "influxdb host to connect to"},
 		cli.StringFlag{"name, n", "", "the name of the system to report as"},
 		cli.BoolFlag{"verbose,vv", "print gathered stats to stderr"},
 	}
@@ -41,6 +42,7 @@ func run(ctx *cli.Context) {
 	}
 
 	cfg := influxdb.ClientConfig{
+		Host:     ctx.String("host"),
 		Database: "usage",
 	}
 	schan, err := NewInfluxCollector(&cfg)
