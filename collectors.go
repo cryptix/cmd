@@ -25,7 +25,7 @@ func CollectMemory(schan chan<- Serieses, sleepLen time.Duration) {
 			Name:    "Memory",
 			Columns: []string{"System", "Total", "Used", "Free", "Cached"},
 			Points: [][]interface{}{
-				{"planc", mem.Total, mem.ActualUsed, mem.ActualFree, mem.ActualFree - mem.Free},
+				{name, mem.Total, mem.ActualUsed, mem.ActualFree, mem.ActualFree - mem.Free},
 			},
 		}
 		log.Printf("Mem:  total[%12d] used[%12d] free[%12d]\n", mem.Total, mem.Used, mem.Free)
@@ -36,7 +36,7 @@ func CollectMemory(schan chan<- Serieses, sleepLen time.Duration) {
 			Name:    "Swap",
 			Columns: []string{"System", "Total", "Used", "Free"},
 			Points: [][]interface{}{
-				{"planc", swap.Total, swap.Used, swap.Free},
+				{name, swap.Total, swap.Used, swap.Free},
 			},
 		}
 		log.Printf("Swap: total[%12d] used[%12d] free[%12d]\n", swap.Total, swap.Used, swap.Free)
@@ -57,7 +57,7 @@ func CollectDiskSpace(schan chan<- Serieses, sleepLen time.Duration, path string
 				Name:    "DiskSpace",
 				Columns: []string{"System", "Total", "Used", "Free"},
 				Points: [][]interface{}{
-					{"planc", diskspace.Total * 1024, diskspace.Used * 1024, diskspace.Free * 1024},
+					{name, diskspace.Total * 1024, diskspace.Used * 1024, diskspace.Free * 1024},
 				},
 			},
 		}
@@ -83,7 +83,7 @@ func CollectCPULoad(schan chan<- Serieses, sleepLen time.Duration) {
 				Name:    "Load",
 				Columns: []string{"System", "One", "Five", "Fifteen"},
 				Points: [][]interface{}{
-					{"planc", avg.One, avg.Five, avg.Fifteen},
+					{name, avg.One, avg.Five, avg.Fifteen},
 				},
 			},
 		}

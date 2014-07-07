@@ -11,14 +11,18 @@ import (
 	"github.com/influxdb/influxdb-go"
 )
 
+var name string
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "influxUsage"
 	app.Usage = "Sends usage reports to influxdb"
+	app.Action = run
+
 	app.Flags = []cli.Flag{
+		cli.StringFlag{"name, n", "", "the name of the system to report as"},
 		cli.BoolFlag{"verbose,vv", "print gathered stats to stderr"},
 	}
-	app.Action = run
 
 	app.Run(os.Args)
 }
@@ -28,6 +32,12 @@ func run(ctx *cli.Context) {
 	log.SetOutput(ioutil.Discard)
 	if ctx.Bool("verbose") {
 		log.SetOutput(os.Stderr)
+	}
+
+	// set default name if flag is empty
+	name = ctx.String("name")
+	if name == "" {
+		name = "undefined"
 	}
 
 	cfg := influxdb.ClientConfig{
