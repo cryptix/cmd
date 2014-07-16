@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -17,11 +16,11 @@ import (
 
 const watchDir = "."
 
-// html includes the client JavaScript
+// template with list of files found in watchDir (with livereload)
 var mdList = template.Must(template.New("mdList").Parse(`<!doctype html>
 <html>
 <head>
-	<title>Example</title>
+	<title>List of Markdown files</title>
 	<script src="http://localhost:35729/livereload.js"></script>
 <body>
 <ul>
@@ -32,6 +31,7 @@ var mdList = template.Must(template.New("mdList").Parse(`<!doctype html>
 </body>
 </html>`))
 
+// template for rendering markdown content (with livereload)
 var md = template.Must(template.New("md").Parse(`<!doctype html>
 <html>
 <head>
@@ -63,7 +63,6 @@ func main() {
 		for {
 			event := <-watcher.Events
 			if strings.HasSuffix(event.Name, ".md") {
-				fmt.Println("Realoading:", event.Name)
 				lrserver.Reload(event.Name)
 			}
 		}
@@ -75,6 +74,7 @@ func main() {
 	http.ListenAndServe(":3000", nil)
 }
 
+// indexHandler builds a list with links to all .md files in the watchDir
 func indexHandler(rw http.ResponseWriter, req *http.Request) {
 	dir, err := os.Open(watchDir)
 	if err != nil {
@@ -101,6 +101,7 @@ func indexHandler(rw http.ResponseWriter, req *http.Request) {
 	mdList.Execute(rw, mdFiles[:i])
 }
 
+// mdHandler ReadFile's the passed file argument and puts it through blackfriday
 func mdHandler(rw http.ResponseWriter, req *http.Request) {
 	fname := req.URL.Query().Get("file")
 	if fname == "" {
@@ -108,6 +109,7 @@ func mdHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// TODO: jail to watchDir and check for extension at least
 	input, err := ioutil.ReadFile(fname)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
