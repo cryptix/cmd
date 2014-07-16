@@ -6,11 +6,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
-	"github.com/russross/blackfriday"
-
 	"github.com/jaschaephraim/lrserver"
+	"github.com/russross/blackfriday"
 	"gopkg.in/fsnotify.v0"
 )
 
@@ -109,8 +109,7 @@ func mdHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// TODO: jail to watchDir and check for extension at least
-	input, err := ioutil.ReadFile(fname)
+	input, err := ioutil.ReadFile(filepath.Base(fname))
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
