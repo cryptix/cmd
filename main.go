@@ -11,6 +11,7 @@ import (
 
 	"github.com/jaschaephraim/lrserver"
 	"github.com/russross/blackfriday"
+	"github.com/skratchdot/open-golang/open"
 	"gopkg.in/fsnotify.v0"
 )
 
@@ -44,16 +45,12 @@ var md = template.Must(template.New("md").Parse(`<!doctype html>
 func main() {
 	// Create file watcher
 	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatalln(err)
-	}
+	check(err)
 	defer watcher.Close()
 
 	// Add dir to watcher
 	err = watcher.Add(watchDir)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	check(err)
 
 	// Start LiveReload server
 	go lrserver.ListenAndServe()
@@ -71,7 +68,18 @@ func main() {
 	// Start serving html
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/md", mdHandler)
-	http.ListenAndServe(":3000", nil)
+
+	done := make(chan struct{})
+	go func() {
+		err = http.ListenAndServe(":3000", nil)
+		check(err)
+		close(done)
+	}()
+
+	err = open.Run("http://localhost:3000")
+	check(err)
+
+	<-done
 }
 
 // indexHandler builds a list with links to all .md files in the watchDir
@@ -117,4 +125,10 @@ func mdHandler(rw http.ResponseWriter, req *http.Request) {
 
 	rw.WriteHeader(http.StatusOK)
 	md.Execute(rw, template.HTML(blackfriday.MarkdownCommon(input)))
+}
+
+func check(err error) {
+	if err != nil {
+		log.Fatalln(err)
+	}
 }
