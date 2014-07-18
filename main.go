@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/codegangsta/cli"
 	"github.com/jaschaephraim/lrserver"
 	"github.com/russross/blackfriday"
 	"github.com/skratchdot/open-golang/open"
@@ -43,6 +45,20 @@ var md = template.Must(template.New("md").Parse(`<!doctype html>
 </html>`))
 
 func main() {
+	app := cli.NewApp()
+	app.Name = "livefriday"
+	app.Usage = "see your markdown grow as you save it"
+	app.Flags = []cli.Flag{
+		cli.StringFlag{Name: "host", Value: "localhost", Usage: "The http host to listen on"},
+		cli.IntFlag{Name: "port,p", Value: 3000, Usage: "The http port to listen on"},
+	}
+	app.Action = run
+
+	app.Run(os.Args)
+
+}
+
+func run(c *cli.Context) {
 	// Create file watcher
 	watcher, err := fsnotify.NewWatcher()
 	check(err)
@@ -69,14 +85,16 @@ func main() {
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/md", mdHandler)
 
+	listenAddr := fmt.Sprintf("%s:%d", c.String("host"), c.Int("port"))
+
 	done := make(chan struct{})
 	go func() {
-		err = http.ListenAndServe(":3000", nil)
+		err = http.ListenAndServe(listenAddr, nil)
 		check(err)
 		close(done)
 	}()
 
-	err = open.Run("http://localhost:3000")
+	err = open.Run("http://" + listenAddr)
 	check(err)
 
 	<-done
