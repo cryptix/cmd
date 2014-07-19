@@ -17,7 +17,7 @@ import (
 	"gopkg.in/fsnotify.v0"
 )
 
-const watchDir = "."
+var watchDir = "."
 
 // template with list of files found in watchDir (with livereload)
 var mdList = template.Must(template.New("mdList").Parse(`<!doctype html>
@@ -49,6 +49,7 @@ func main() {
 	app.Name = "livefriday"
 	app.Usage = "see your markdown grow as you save it"
 	app.Flags = []cli.Flag{
+		cli.StringFlag{Name: "dir,d", Value: ".", Usage: "The directory to watch and compile"},
 		cli.StringFlag{Name: "host", Value: "localhost", Usage: "The http host to listen on"},
 		cli.IntFlag{Name: "port,p", Value: 3000, Usage: "The http port to listen on"},
 	}
@@ -63,6 +64,8 @@ func run(c *cli.Context) {
 	watcher, err := fsnotify.NewWatcher()
 	check(err)
 	defer watcher.Close()
+
+	watchDir = c.String("dir")
 
 	// Add dir to watcher
 	err = watcher.Add(watchDir)
@@ -135,7 +138,7 @@ func mdHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	input, err := ioutil.ReadFile(filepath.Base(fname))
+	input, err := ioutil.ReadFile(filepath.Join(watchDir, filepath.Base(fname)))
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
