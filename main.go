@@ -78,7 +78,7 @@ func run(c *cli.Context) {
 	go func() {
 		for {
 			event := <-watcher.Events
-			if strings.HasSuffix(event.Name, ".md") {
+			if strings.HasSuffix(event.Name, ".md") || strings.HasSuffix(event.Name, ".mdown") {
 				lrserver.Reload(event.Name)
 			}
 		}
@@ -120,7 +120,7 @@ func indexHandler(rw http.ResponseWriter, req *http.Request) {
 	mdFiles := make([]string, len(dirNames))
 	i := 0
 	for _, n := range dirNames {
-		if strings.HasSuffix(n, ".md") {
+		if strings.HasSuffix(n, ".md") || strings.HasSuffix(n, ".mdown") {
 			mdFiles[i] = n
 			i++
 		}
