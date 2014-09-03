@@ -1,18 +1,18 @@
 package main
 
-import "github.com/influxdb/influxdb-go"
+import "github.com/influxdb/influxdb/client"
 
-type serieses []*influxdb.Series
+type serieses []*client.Series
 
-func NewInfluxCollector(dbCfg *influxdb.ClientConfig) (chan<- serieses, error) {
+func NewInfluxCollector(dbCfg *client.ClientConfig) (chan<- serieses, error) {
 	var (
 		err error
-		db  *influxdb.Client
+		db  *client.Client
 	)
 
 	//dbCfg.Database = "usage"
 
-	db, err = influxdb.NewClient(dbCfg)
+	db, err = client.NewClient(dbCfg)
 	if err != nil {
 		return nil, err
 	}

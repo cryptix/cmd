@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/gosigar"
-	"github.com/influxdb/influxdb-go"
+	"github.com/influxdb/influxdb/client"
 )
 
 func CollectMemory(schan chan<- serieses, sleepLen time.Duration) {
@@ -19,7 +19,7 @@ func CollectMemory(schan chan<- serieses, sleepLen time.Duration) {
 	for {
 		// ram
 		checkFatal(mem.Get())
-		serieses[0] = &influxdb.Series{
+		serieses[0] = &client.Series{
 			Name:    "Memory",
 			Columns: []string{"System", "Total", "Used", "Free", "Cached"},
 			Points: [][]interface{}{
@@ -30,7 +30,7 @@ func CollectMemory(schan chan<- serieses, sleepLen time.Duration) {
 
 		// swap
 		checkFatal(swap.Get())
-		serieses[1] = &influxdb.Series{
+		serieses[1] = &client.Series{
 			Name:    "Swap",
 			Columns: []string{"System", "Total", "Used", "Free"},
 			Points: [][]interface{}{
@@ -51,7 +51,7 @@ func CollectDiskSpace(schan chan<- serieses, sleepLen time.Duration, path string
 	for {
 		checkFatal(diskspace.Get(path))
 		schan <- serieses{
-			&influxdb.Series{
+			&client.Series{
 				Name:    "DiskSpace",
 				Columns: []string{"System", "Total", "Used", "Free"},
 				Points: [][]interface{}{
@@ -77,7 +77,7 @@ func CollectCPULoad(schan chan<- serieses, sleepLen time.Duration) {
 	for {
 		checkFatal(avg.Get())
 		schan <- serieses{
-			&influxdb.Series{
+			&client.Series{
 				Name:    "Load",
 				Columns: []string{"System", "One", "Five", "Fifteen"},
 				Points: [][]interface{}{

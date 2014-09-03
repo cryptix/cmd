@@ -8,7 +8,7 @@ import (
 
 	"github.com/cloudfoundry/gosigar"
 	"github.com/codegangsta/cli"
-	"github.com/influxdb/influxdb-go"
+	"github.com/influxdb/influxdb/client"
 )
 
 var name string
@@ -41,7 +41,7 @@ func run(ctx *cli.Context) {
 		name = "undefined"
 	}
 
-	cfg := influxdb.ClientConfig{
+	cfg := client.ClientConfig{
 		Host:     ctx.String("host"),
 		Database: "usage",
 	}
