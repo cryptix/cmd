@@ -14,7 +14,7 @@ import (
 	"github.com/jaschaephraim/lrserver"
 	"github.com/russross/blackfriday"
 	"github.com/skratchdot/open-golang/open"
-	"gopkg.in/fsnotify.v0"
+	"gopkg.in/fsnotify.v1"
 )
 
 var watchDir = "."
