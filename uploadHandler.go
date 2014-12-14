@@ -1,14 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 )
-
-const maxSize = 1024 * 1024 * 5
 
 func uploadHandler(resp http.ResponseWriter, req *http.Request) {
 	file, header, err := req.FormFile("fupload")
@@ -26,7 +25,13 @@ func uploadHandler(resp http.ResponseWriter, req *http.Request) {
 	}
 	defer input.Close()
 
-	io.Copy(input, file)
-	log.Printf("Got File: %s\n", header.Filename)
-	http.Redirect(resp, req, "/", http.StatusFound)
+	n, err := io.Copy(input, file)
+	if err != nil {
+		http.Error(resp, err.Error(), http.StatusInternalServerError)
+		log.Printf("uploadHandler - io.Copy - Error: %v\n", err)
+		return
+	}
+
+	log.Printf("Got File: %s Len: %d\n", header.Filename, n)
+	fmt.Fprintf(resp, `{"data":"%s", "status":%d}`, "upload complete", http.StatusCreated)
 }

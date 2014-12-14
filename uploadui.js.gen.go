@@ -1,0 +1,7 @@
+// AUTOMATICALLY GENERATED FILE. DO NOT EDIT.
+
+package main
+
+var uploadui = js(asset.init(asset{Name: "uploadui.js", Content: "" +
+	"document.addEventListener(\"DOMContentLoaded\", function(event) { \n    var _submit = document.getElementById('_submit'), \n    _file = document.getElementById('_file');\n    \n    var $pb = $('.progress .progress-bar');\n\n    var upload = function(){\n\n        if(_file.files.length === 0){\n            return;\n        }\n\n        var data = new FormData();\n        data.append('fupload', _file.files[0]);\n\n        var request = new XMLHttpRequest();\n        request.onreadystatechange = function(){\n            if(request.readyState == 4){\n                try {\n                    var resp = JSON.parse(request.response);\n                } catch (e){\n                    var resp = {\n                        status: 'error',\n                        data: 'Unknown error occurred: [' + request.responseText + ']'\n                    };\n                }\n                alert(resp.status + ': ' + resp.data);\n            }\n        };\n\n        request.upload.addEventListener('progress', function(e){\n            $pb.attr('data-transitiongoal', Math.ceil(e.loaded* 100/e.total)).progressbar({display_text: 'fill'});\n        }, false);\n\n        request.open('POST', 'upload');\n        request.send(data);\n    }\n\n    _submit.addEventListener('click', upload);\n});" +
+	""}))
