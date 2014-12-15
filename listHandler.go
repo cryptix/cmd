@@ -2,30 +2,23 @@ package main
 
 import (
 	"html/template"
-	"log"
 	"net/http"
 	"os"
 )
 
-func tmpl(a asset) *template.Template {
-	return template.Must(template.New("listTemplate").Parse(a.Content))
-}
+var listTmpl = template.Must(template.New("listTemplate").Parse(assetMustString("list.tmpl")))
 
-func listHandler(resp http.ResponseWriter, req *http.Request) {
+func listHandler(resp http.ResponseWriter, req *http.Request) error {
 	dir, err := os.Open(*dumpDir)
 	if err != nil {
-		http.Error(resp, err.Error(), http.StatusInternalServerError)
-		log.Printf("listHandler - os.Open - Error: %v\n", err)
-		return
+		return err
 	}
 	defer dir.Close()
 
 	fileInfos, err := dir.Readdir(-1)
 	if err != nil {
-		http.Error(resp, err.Error(), http.StatusInternalServerError)
-		log.Printf("listHandler - dir.Readdir - Error: %v\n", err)
-		return
+		return err
 	}
 
-	list.Execute(resp, fileInfos)
+	return listTmpl.Execute(resp, fileInfos)
 }

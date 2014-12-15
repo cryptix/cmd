@@ -1,49 +1,47 @@
+//go:generate go-bindata -pkg=$GOPACKAGE -prefix=assets assets/...
+
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/codegangsta/negroni"
+	"github.com/cryptix/go/http/render"
 	"github.com/goji/httpauth"
 )
 
 var (
 	host = flag.String("host", "localhost", "The hostname/ip to listen on.")
-	port = flag.Int("port", 0, "The port number to listen on.")
+	port = flag.String("port", "0", "The port number to listen on.")
 
 	dumpDir = flag.String("dir", ".", "The directory used to store and serve files")
 
 	user = flag.String("user", "", "HTTP BasicAuth User")
 	pass = flag.String("pass", "ChangeMe", "HTTP BasicAuth User")
+
+	progStart = time.Now()
 )
-
-//go:generate -command asset go run asset.go
-//go:generate asset list.tmpl
-//go:generate asset uploadui.js
-//go:generate asset bootstrapProgressbar.min.js
-
-type JS struct {
-	asset
-}
-
-func js(a asset) JS {
-	return JS{a}
-}
 
 func main() {
 	flag.Parse()
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/list", listHandler)
-	mux.HandleFunc("/downloadAll", zipDownloadHandler)
+	mux.Handle("/list", render.Html(listHandler))
+	mux.Handle("/downloadAll", render.Binary(zipDownloadHandler))
 	mux.HandleFunc("/upload", uploadHandler)
-	mux.Handle("/uploadui.js", uploadui)
-	mux.Handle("/bootstrapProgressbar.js", bootstrapProgressbar)
+
+	mux.Handle("/uploadui.js", render.Binary(serveAsset))
+	mux.Handle("/bootstrapProgressbar.min.js", render.Binary(serveAsset))
+
 	mux.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir(*dumpDir))))
 
 	n := negroni.New()
@@ -55,7 +53,11 @@ func main() {
 		n.UseHandler(mux)
 	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", *host, *port))
+	if *port == "0" {
+		*port = os.Getenv("PORT")
+	}
+
+	l, err := net.Listen("tcp", *host+":"+*port)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -64,4 +66,30 @@ func main() {
 	if err := http.Serve(l, n); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func serveAsset(w http.ResponseWriter, req *http.Request) error {
+	b, err := Asset(req.URL.Path[1:])
+	if err != nil {
+		return err
+	}
+
+	http.ServeContent(w, req, req.URL.Path[1:], progStart, bytes.NewReader(b))
+	return nil
+}
+
+func assetMustString(name string) string {
+	cannonicalName := strings.Replace(name, "\\", "/", -1)
+	f, ok := _bindata[cannonicalName]
+	if !ok {
+		log.Fatal(fmt.Errorf("Asset %s not found", name))
+		return ""
+	}
+
+	b, err := f()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return string(b)
+
 }
