@@ -38,6 +38,7 @@ var mdList = template.Must(template.New("mdList").Parse(`<!doctype html>
 var md = template.Must(template.New("md").Parse(`<!doctype html>
 <html>
 <head>
+	<!-- <link href="http://kevinburke.bitbucket.org/markdowncss/markdown.css" rel="stylesheet"></link>-->
 	<script src="http://localhost:35729/livereload.js"></script>
 <body>
 {{.}}
@@ -87,6 +88,7 @@ func run(c *cli.Context) {
 	// Start serving html
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/md", mdHandler)
+	http.Handle("/assets/", http.StripPrefix("/assets", http.FileServer(http.Dir(watchDir))))
 
 	listenAddr := fmt.Sprintf("%s:%d", c.String("host"), c.Int("port"))
 
