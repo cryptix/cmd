@@ -5,5 +5,6 @@
 * gema - extracts rtmp urls from various tv sites
 * livefriday - live reload markdown in your browser
 * influxUsage - gather system usage with sigar and push it to influxdb
-* pinghealth - pings hosts and logs metrics to influxdb
+* pinghealth - pings hosts to check network health
+* pingmon - pings hosts and logs metrics to influxdb
 * prime - returns a command until it finishes under a specified time limit

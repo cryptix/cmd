@@ -2,8 +2,6 @@
 //
 // timout, number of pings and retries can be configured with flags.
 //
-// metrics are logged to influxdb using https://github.com/rcrowley/go-metrics
-//
 // ping construction is done by https://github.com/erikh/ping
 package main
 
@@ -11,15 +9,12 @@ import (
 	"flag"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/cryptix/go/backoff"
 	"github.com/cryptix/go/logging"
 	"github.com/erikh/ping"
-	"github.com/rcrowley/go-metrics"
-	"github.com/rcrowley/go-metrics/influxdb"
 	"github.com/sethgrid/multibar"
 )
 
@@ -42,13 +37,6 @@ func main() {
 		log.Warning("No hosts to ping. quiting.")
 		os.Exit(1)
 	}
-
-	go influxdb.Influxdb(metrics.DefaultRegistry, *timeout/2, &influxdb.Config{
-		Host:     "127.0.0.1:8086",
-		Database: "nethealth",
-		Username: "higgs",
-		Password: "logg",
-	})
 
 	// construct multibars
 	var err error
@@ -90,16 +78,12 @@ func tryPings(wg *sync.WaitGroup, host string) {
 		}
 	}
 
-	mt := metrics.NewTimer()
-	metrics.Register("ping."+strings.Replace(host, ".", "-", -1), mt)
-
 	for i := 0; i < *cnt; i++ {
 		barMap[host](i)
 		time.Sleep(500 * time.Millisecond)
 
 		if attempt > *retry {
 			bars.Printf("%15s %2d - attempts exceeded", ip, i)
-			mt.Update(*timeout * time.Duration(*retry))
 			return
 		}
 
@@ -114,12 +98,10 @@ func tryPings(wg *sync.WaitGroup, host string) {
 				err,
 				attempt,
 				time.Since(start))
-			mt.Update(time.Since(start) + time.Second)
 			continue
 		}
 
 		attempt = 0
-		mt.UpdateSince(start)
 	}
 	barMap[host](*cnt)
 }
