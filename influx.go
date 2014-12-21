@@ -10,8 +10,6 @@ func NewInfluxCollector(dbCfg *client.ClientConfig) (chan<- serieses, error) {
 		db  *client.Client
 	)
 
-	//dbCfg.Database = "usage"
-
 	db, err = client.NewClient(dbCfg)
 	if err != nil {
 		return nil, err
