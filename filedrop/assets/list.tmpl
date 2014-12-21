@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>filedrop</title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
+		<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js" type="text/javascript"></script>
+		<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.1/js/bootstrap.min.js" type="text/javascript"></script>
+		<script src="bootstrapProgressbar.min.js" type="text/javascript"></script>
+		<script src="uploadui.js" type="text/javascript"></script>
+	</head>
+	<body>
+		<div class="container">
+		<h1>Upload File</h1>
+	        <p>
+	            Select File: <input type='file' id='_file'> <input type='button' id='_submit' value='Upload!'>
+	        </p>
+			<div class="progress progress-striped active">
+			    <div class="progress-bar progress-bar-striped" role="progressbar"></div>
+			</div>
+
+		<h1>List of files</h1>
+		<table class="table">
+		<thead>
+			<tr>
+				<td>Name</td>
+				<td>Size</td>
+			</tr>
+		</thead>
+		<tbody>
+		{{range .}}
+			{{if .IsDir}}
+			{{else}}
+			<tr>
+				<td><a href="files/{{.Name}}">{{.Name}}</a></td>
+				<td>{{.Size}} Bytes</td>
+			</tr>
+			{{end}}
+		{{end}}
+		</tbody>
+		</table>
+
+		<h1>Zip of all files</h1>
+		<a href="/downloadAll">Download</a>
+		</div>
+</body>
+</html>
