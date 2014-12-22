@@ -9,8 +9,8 @@ import (
 	"os"
 	"path"
 
-	"code.google.com/p/bencode-go"
 	"github.com/cheggaaa/pb"
+	"github.com/jackpal/bencode-go"
 )
 
 // currently only single file
