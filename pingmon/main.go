@@ -1,6 +1,6 @@
 // pinghealth takes a hostfile from the command line, pings each of them until the process is killed.
 //
-// timout, number of pings and retries can be configured with flags.
+// timout, wait between pings and retries can be configured with flags.
 //
 // metrics are logged to influxdb using https://github.com/rcrowley/go-metrics
 //
@@ -72,16 +72,19 @@ func NewPinger(s string) (*pinger, error) {
 }
 
 func (p *pinger) run() {
-	var attempt int
+	var (
+		start   time.Time
+		attempt int
+	)
 
+	start = time.Now()
 	for {
-		start := time.Now()
 
 		select {
 
 		case <-time.After(backoff.Default.Duration(attempt)):
 			if attempt > *retry {
-				log.Warningf("%15s - attempts exceeded", p.ip)
+				log.Warningf("%15s - attempts exceeded", p.name)
 				attempt = 0
 				time.Sleep(1 * time.Minute)
 				continue
@@ -98,9 +101,11 @@ func (p *pinger) run() {
 				timeouts.Inc(1)
 				continue
 			}
-			attempt = 0
 			p.timer.UpdateSince(start)
 			time.Sleep(*wait)
+
+			attempt = 0
+			start = time.Now() // reset after sucessfull ping - timer updates include timeout duration
 
 		case <-p.done: // quit
 			return
