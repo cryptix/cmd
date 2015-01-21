@@ -35,7 +35,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/list", render.Html(listHandler))
+	mux.Handle("/list", render.HTML(listHandler))
 	mux.Handle("/downloadAll", render.Binary(zipDownloadHandler))
 	mux.HandleFunc("/upload", uploadHandler)
 
