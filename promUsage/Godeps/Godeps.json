@@ -1,0 +1,58 @@
+{
+	"ImportPath": "github.com/cryptix/cmd/promUsage",
+	"GoVersion": "go1.4.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/cloudfoundry/gosigar",
+			"Comment": "scotty_09012012-24-gc36220e",
+			"Rev": "c36220e40949db17f92b2d7eaf0355eada43993a"
+		},
+		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "1.2.0-74-g50c77ec",
+			"Rev": "50c77ecec0068c9aef9d90ae0fd0fdf410041da3"
+		},
+		{
+			"ImportPath": "github.com/golang/protobuf/proto",
+			"Rev": "c22ae3cf020a21ebb7ae566dccbe90fc8ea4f9ea"
+		},
+		{
+			"ImportPath": "github.com/matttproud/golang_protobuf_extensions/ext",
+			"Rev": "ba7d65ac66e9da93a714ca18f6d1bc7a0c09100c"
+		},
+		{
+			"ImportPath": "github.com/prometheus/client_golang/_vendor/goautoneg",
+			"Comment": "0.1.0-37-g54238de",
+			"Rev": "54238dea8fa4dfaa411b8c9ef0680ba441fb7b1c"
+		},
+		{
+			"ImportPath": "github.com/prometheus/client_golang/_vendor/perks/quantile",
+			"Comment": "0.1.0-37-g54238de",
+			"Rev": "54238dea8fa4dfaa411b8c9ef0680ba441fb7b1c"
+		},
+		{
+			"ImportPath": "github.com/prometheus/client_golang/model",
+			"Comment": "0.1.0-37-g54238de",
+			"Rev": "54238dea8fa4dfaa411b8c9ef0680ba441fb7b1c"
+		},
+		{
+			"ImportPath": "github.com/prometheus/client_golang/prometheus",
+			"Comment": "0.1.0-37-g54238de",
+			"Rev": "54238dea8fa4dfaa411b8c9ef0680ba441fb7b1c"
+		},
+		{
+			"ImportPath": "github.com/prometheus/client_golang/text",
+			"Comment": "0.1.0-37-g54238de",
+			"Rev": "54238dea8fa4dfaa411b8c9ef0680ba441fb7b1c"
+		},
+		{
+			"ImportPath": "github.com/prometheus/client_model/go",
+			"Comment": "model-0.0.2-12-gfa8ad6f",
+			"Rev": "fa8ad6fec33561be4280a8f0514318c79d7f6cb6"
+		},
+		{
+			"ImportPath": "github.com/prometheus/procfs",
+			"Rev": "6c34ef819e19b4e16f410100ace4aa006f0e3bf8"
+		}
+	]
+}
