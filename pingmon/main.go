@@ -10,36 +10,39 @@ package main
 import (
 	"bufio"
 	"flag"
-	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/cryptix/go/backoff"
 	"github.com/cryptix/go/logging"
 	"github.com/erikh/ping"
-	"github.com/rcrowley/go-metrics"
-	"github.com/rcrowley/go-metrics/influxdb"
+	"github.com/prometheus/client_golang/prometheus"
+	"gopkg.in/errgo.v1"
 )
 
 var (
 	// flags
+	listenAddr = flag.String("http", "localhost:1337", "on what http address to listen")
+	name       = flag.String("name", "undefined", "name to give your metrics")
+
 	retry   = flag.Int("r", 10, "number of retries before aborting")
 	timeout = flag.Duration("t", 100*time.Millisecond, "what timeout to use for each ping")
 	wait    = flag.Duration("w", 500*time.Millisecond, "how long to wait between ping bursts")
 
 	// globals
-	log      = logging.Logger("pingmon")
-	timeouts metrics.Counter
+	log = logging.Logger("pingmon")
 )
 
 type pinger struct {
-	ip    *net.IPAddr
-	name  string
-	done  chan struct{}
-	timer metrics.Timer
+	ip       *net.IPAddr
+	host     string
+	done     chan struct{}
+	timeouts prometheus.Counter
+	latency  prometheus.Summary
 }
 
 func NewPinger(s string) (*pinger, error) {
@@ -47,27 +50,46 @@ func NewPinger(s string) (*pinger, error) {
 		err error
 		p   pinger
 	)
+	if len(s) < 0 {
+		return nil, errgo.New("host cant be empty")
+	}
 
-	p.name = s
+	p.host = s
 
-	log.Debugf("Resolving for %s", s)
 	p.ip, err = net.ResolveIPAddr("ip6", s)
 	if err != nil {
-		log.Warningf("%15s - ResolveIPAddr(ipv6) failed - %s", p.name, err)
+		log.Warningf("%15s - ResolveIPAddr(ipv6) failed - %s", p.host, err)
 		p.ip, err = net.ResolveIPAddr("ip4", s)
 		if err != nil {
-			return nil, fmt.Errorf("%15s - ResolveIPAddr(ipv4) failed - %s", p.name, err)
+			return nil, errgo.Notef(err, "ResolveIPAddr(ipv4) failed - %s", p.host)
 		}
 	}
 
-	p.done = make(chan struct{})
-
-	p.timer = metrics.NewTimer()
-	err = metrics.Register("ping."+strings.Replace(p.name, ".", "-", -1), p.timer)
-	if err != nil {
-		return nil, err
+	p.timeouts = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "pingmon_timeouts",
+		Help: "number of timeouts occured",
+		ConstLabels: prometheus.Labels{
+			"name": *name,
+			"host": p.host,
+		},
+	})
+	if err = prometheus.Register(p.timeouts); err != nil {
+		return nil, errgo.Notef(err, "Register of timeouts failed for %s", p.host)
 	}
 
+	p.latency = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "pingmon_latency",
+		Help: "how big is the latency in avaerage",
+		ConstLabels: prometheus.Labels{
+			"name": *name,
+			"host": p.host,
+		},
+	})
+	if err = prometheus.Register(p.latency); err != nil {
+		return nil, errgo.Notef(err, "Register of latency failed for %s", p.host)
+	}
+
+	p.done = make(chan struct{})
 	return &p, nil
 }
 
@@ -84,7 +106,10 @@ func (p *pinger) run() {
 
 		case <-time.After(backoff.Default.Duration(attempt)):
 			if attempt > *retry {
-				log.Warningf("%15s - attempts exceeded", p.name)
+				log.WithFields(logrus.Fields{
+					"attempt": attempt,
+					"host":    p.host,
+				}).Warning("attempts exceeded")
 				attempt = 0
 				time.Sleep(1 * time.Minute)
 				continue
@@ -93,17 +118,17 @@ func (p *pinger) run() {
 			err := ping.Pinger(p.ip, *timeout+backoff.Default.Duration(attempt))
 			if err != nil { // retry
 				attempt++
-				log.Noticef("%15s - %50s (attempt %d | took %v)",
-					p.name,
-					err,
-					attempt,
-					time.Since(start))
-				timeouts.Inc(1)
+				log.WithFields(logrus.Fields{
+					"host":    p.host,
+					"error":   err,
+					"attempt": attempt,
+					"took":    time.Since(start),
+				}).Info("ping failed")
+				p.timeouts.Inc()
 				continue
 			}
-			p.timer.UpdateSince(start)
+			p.latency.Observe(time.Since(start).Seconds())
 			time.Sleep(*wait)
-
 			attempt = 0
 			start = time.Now() // reset after sucessfull ping - timer updates include timeout duration
 
@@ -149,16 +174,11 @@ func main() {
 		}
 	}()
 
-	go influxdb.Influxdb(metrics.DefaultRegistry, *timeout/2, &influxdb.Config{
-		Host:     "127.0.0.1:8086",
-		Database: "nethealth",
-		Username: "higgs",
-		Password: "logg",
-	})
-
-	timeouts = metrics.NewCounter()
-	err = metrics.Register("ping.timeouts", timeouts)
-	logging.CheckFatal(err)
+	go func() {
+		lis, err := net.Listen("tcp", *listenAddr)
+		logging.CheckFatal(err)
+		http.Serve(lis, prometheus.Handler())
+	}()
 
 	hostSc := bufio.NewScanner(hostf)
 
