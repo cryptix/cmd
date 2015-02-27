@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	htmpParser "code.google.com/p/go.net/html"
+	htmpParser "golang.org/x/net/html"
 )
 
 var mediaArd = &Mediathek{

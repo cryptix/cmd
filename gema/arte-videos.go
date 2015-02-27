@@ -1,13 +1,14 @@
 package main
 
 import (
-	"code.google.com/p/go.net/html"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
+
+	"golang.org/x/net/html"
 )
 
 var mediaArteVideos = &Mediathek{
