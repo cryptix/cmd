@@ -73,14 +73,16 @@ func run(c *cli.Context) {
 	check(err)
 
 	// Start LiveReload server
-	go lrserver.ListenAndServe()
+	lr, err := lrserver.New(lrserver.DefaultName, lrserver.DefaultPort)
+	check(err)
+	go lr.ListenAndServe()
 
 	// Start goroutine that requests reload upon watcher event
 	go func() {
 		for {
 			event := <-watcher.Events
 			if strings.HasSuffix(event.Name, ".md") || strings.HasSuffix(event.Name, ".mdown") {
-				lrserver.Reload(event.Name)
+				lr.Reload(event.Name)
 			}
 		}
 	}()
