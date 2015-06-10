@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,7 +53,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{Name: "dir,d", Value: ".", Usage: "The directory to watch and compile"},
 		cli.StringFlag{Name: "host", Value: "localhost", Usage: "The http host to listen on"},
-		cli.IntFlag{Name: "port,p", Value: 3000, Usage: "The http port to listen on"},
+		cli.IntFlag{Name: "port,p", Value: 0, Usage: "The http port to listen on"},
 	}
 	app.Action = run
 
@@ -94,17 +95,18 @@ func run(c *cli.Context) {
 
 	listenAddr := fmt.Sprintf("%s:%d", c.String("host"), c.Int("port"))
 
-	done := make(chan struct{})
-	go func() {
-		err = http.ListenAndServe(listenAddr, nil)
-		check(err)
-		close(done)
-	}()
-
-	err = open.Run("http://" + listenAddr)
+	// Start listening first.
+	listener, err := net.Listen("tcp", listenAddr)
 	check(err)
+	listenAddr = listener.Addr().String()
 
-	<-done
+	// Open a browser tab and navigate to the main page.
+	go open.Run("http://" + listenAddr)
+
+	log.Println("livefriday server is running at http://" + listenAddr)
+
+	err = http.Serve(listener, nil)
+	check(err)
 }
 
 // indexHandler builds a list with links to all .md files in the watchDir
