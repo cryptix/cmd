@@ -1,12 +1,15 @@
-//go:generate go-bindata -pkg=$GOPACKAGE -prefix=assets assets/...
+/*
+filedrop is a simple http server with an upload html page
 
+- supports HTTP Basic out (-user / -pass flags)
+- supports HTTPS listening (-key / -crt flags)
+
+*/
 package main
 
 import (
-	"bytes"
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -17,6 +20,7 @@ import (
 	"github.com/codegangsta/negroni"
 	"github.com/cryptix/go/http/render"
 	"github.com/goji/httpauth"
+	"github.com/shurcooL/go/gzip_file_server"
 )
 
 var (
@@ -34,6 +38,20 @@ var (
 	progStart = time.Now()
 )
 
+// Redirect to public ipfs gateways - get your browser plugin..!
+type ipfsRedirectHandler struct {
+	Gateway string
+}
+
+func (rh *ipfsRedirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !(strings.HasPrefix(r.URL.Path, "/ipfs/") || strings.HasPrefix(r.URL.Path, "/ipns/")) {
+		log.Println("Path:", r.URL.Path)
+		http.Error(w, "ipfsHandler: unknown path prefix", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, rh.Gateway+r.URL.Path, http.StatusFound)
+}
+
 func main() {
 	flag.Parse()
 
@@ -43,9 +61,11 @@ func main() {
 	mux.Handle("/downloadAll", render.Binary(zipDownloadHandler))
 	mux.HandleFunc("/upload", uploadHandler)
 
-	mux.Handle("/uploadui.js", render.Binary(serveAsset))
-	mux.Handle("/bootstrapProgressbar.min.js", render.Binary(serveAsset))
+	irh := &ipfsRedirectHandler{Gateway: "http://gateway.ipfs.io"}
+	mux.Handle("/ipfs/", irh)
+	mux.Handle("/ipns/", irh)
 
+	mux.Handle("/assets/", http.StripPrefix("/assets/", gzip_file_server.New(assets)))
 	mux.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir(*dumpDir))))
 
 	n := negroni.New()
@@ -84,28 +104,6 @@ func main() {
 	}
 
 	checkFatal(server.Serve(l))
-}
-
-func serveAsset(w http.ResponseWriter, req *http.Request) error {
-	b, err := Asset(req.URL.Path[1:])
-	checkFatal(err)
-
-	http.ServeContent(w, req, req.URL.Path[1:], progStart, bytes.NewReader(b))
-	return nil
-}
-
-func assetMustString(name string) string {
-	cannonicalName := strings.Replace(name, "\\", "/", -1)
-	f, ok := _bindata[cannonicalName]
-	if !ok {
-		log.Fatal(fmt.Errorf("Asset %s not found", name))
-		return ""
-	}
-
-	b, err := f()
-	checkFatal(err)
-	return string(b)
-
 }
 
 func checkFatal(err error) {

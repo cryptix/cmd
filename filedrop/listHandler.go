@@ -4,9 +4,11 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+
+	"github.com/shurcooL/go/vfs/httpfs/html/vfstemplate"
 )
 
-var listTmpl = template.Must(template.New("listTemplate").Parse(assetMustString("list.tmpl")))
+var listTmpl = template.Must(vfstemplate.ParseFiles(assets, nil, "/list.tmpl"))
 
 func listHandler(resp http.ResponseWriter, req *http.Request) error {
 	dir, err := os.Open(*dumpDir)
