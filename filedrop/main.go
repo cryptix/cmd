@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"log"
@@ -26,6 +27,9 @@ var (
 
 	user = flag.String("user", "", "HTTP BasicAuth User")
 	pass = flag.String("pass", "ChangeMe", "HTTP BasicAuth User")
+
+	sslKey = flag.String("key", "", "Key-file for SSL connections")
+	sslCrt = flag.String("crt", "", "Certificate for SSL connections")
 
 	progStart = time.Now()
 )
@@ -58,21 +62,33 @@ func main() {
 	}
 
 	l, err := net.Listen("tcp", *host+":"+*port)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Serving at http://%s/", l.Addr())
+	checkFatal(err)
 
-	if err := http.Serve(l, n); err != nil {
-		log.Fatal(err)
+	var server http.Server
+	server.Handler = n
+
+	if *sslKey != "" {
+		tlsCfg := &tls.Config{}
+		if tlsCfg.NextProtos == nil {
+			tlsCfg.NextProtos = []string{"http/1.1"}
+		}
+		var err error
+		tlsCfg.Certificates = make([]tls.Certificate, 1)
+		tlsCfg.Certificates[0], err = tls.LoadX509KeyPair(*sslCrt, *sslKey)
+		checkFatal(err)
+
+		l = tls.NewListener(l, tlsCfg)
+		log.Printf("Serving at https://%s/", l.Addr())
+	} else {
+		log.Printf("Serving at http://%s/", l.Addr())
 	}
+
+	checkFatal(server.Serve(l))
 }
 
 func serveAsset(w http.ResponseWriter, req *http.Request) error {
 	b, err := Asset(req.URL.Path[1:])
-	if err != nil {
-		return err
-	}
+	checkFatal(err)
 
 	http.ServeContent(w, req, req.URL.Path[1:], progStart, bytes.NewReader(b))
 	return nil
@@ -87,9 +103,13 @@ func assetMustString(name string) string {
 	}
 
 	b, err := f()
+	checkFatal(err)
+	return string(b)
+
+}
+
+func checkFatal(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return string(b)
-
 }
