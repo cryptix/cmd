@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/shurcooL/go/vfs/httpfs/html/vfstemplate"
+	"github.com/shurcooL/httpfs/html/vfstemplate"
 )
 
 var listTmpl = template.Must(vfstemplate.ParseFiles(assets, nil, "/list.tmpl"))

@@ -31,13 +31,14 @@
 		</thead>
 		<tbody>
 		{{range .}}
-			{{if .IsDir}}
-			{{else}}
 			<tr>
-				<td><a href="files/{{.Name}}">{{.Name}}</a></td>
+  			<td><a href="/{{.Name}}">{{.Name}}</a></td>
+  			{{if .IsDir}}
+        <td>Dir</td>
+  			{{else}}
 				<td>{{.Size}} Bytes</td>
+  			{{end}}
 			</tr>
-			{{end}}
 		{{end}}
 		</tbody>
 		</table>

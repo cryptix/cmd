@@ -66,7 +66,7 @@ func main() {
 	mux.Handle("/ipns/", irh)
 
 	mux.Handle("/assets/", http.StripPrefix("/assets/", gzip_file_server.New(assets)))
-	mux.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir(*dumpDir))))
+	mux.Handle("/", http.FileServer(http.Dir(*dumpDir)))
 
 	n := negroni.New()
 	n.Use(negroni.NewRecovery())
@@ -77,7 +77,7 @@ func main() {
 		n.UseHandler(mux)
 	}
 
-	if *port == "0" {
+	if *port == "0" && os.Getenv("PORT") != "" {
 		*port = os.Getenv("PORT")
 	}
 
