@@ -14,7 +14,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/codegangsta/negroni"
@@ -38,32 +37,15 @@ var (
 	progStart = time.Now()
 )
 
-// Redirect to public ipfs gateways - get your browser plugin..!
-type ipfsRedirectHandler struct {
-	Gateway string
-}
-
-func (rh *ipfsRedirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !(strings.HasPrefix(r.URL.Path, "/ipfs/") || strings.HasPrefix(r.URL.Path, "/ipns/")) {
-		log.Println("Path:", r.URL.Path)
-		http.Error(w, "ipfsHandler: unknown path prefix", http.StatusInternalServerError)
-		return
-	}
-	http.Redirect(w, r, rh.Gateway+r.URL.Path, http.StatusFound)
-}
-
 func main() {
 	flag.Parse()
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/list", render.HTML(listHandler))
+	mux.Handle("/js", render.HTML(jsHandler))
+	mux.Handle("/nojs", render.HTML(nojsHandler))
 	mux.Handle("/downloadAll", render.Binary(zipDownloadHandler))
 	mux.HandleFunc("/upload", uploadHandler)
-
-	irh := &ipfsRedirectHandler{Gateway: "http://gateway.ipfs.io"}
-	mux.Handle("/ipfs/", irh)
-	mux.Handle("/ipns/", irh)
 
 	mux.Handle("/assets/", http.StripPrefix("/assets/", gzip_file_server.New(assets)))
 	mux.Handle("/", http.FileServer(http.Dir(*dumpDir)))
@@ -110,4 +92,5 @@ func checkFatal(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
 }

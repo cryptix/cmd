@@ -8,7 +8,10 @@ import (
 	"github.com/shurcooL/httpfs/html/vfstemplate"
 )
 
-var listTmpl = template.Must(vfstemplate.ParseFiles(assets, nil, "/list.tmpl"))
+var (
+	jsTmpl   = template.Must(vfstemplate.ParseFiles(assets, nil, "/js.tmpl"))
+	nojsTmpl = template.Must(vfstemplate.ParseFiles(assets, nil, "/nojs.tmpl"))
+)
 
 func listHandler(resp http.ResponseWriter, req *http.Request) error {
 	dir, err := os.Open(*dumpDir)
@@ -22,5 +25,9 @@ func listHandler(resp http.ResponseWriter, req *http.Request) error {
 		return err
 	}
 
-	return listTmpl.Execute(resp, fileInfos)
+	return jsTmpl.Execute(resp, fileInfos)
+}
+
+func nojsHandler(resp http.ResponseWriter, req *http.Request) error {
+	return nojsTmpl.Execute(resp, nil)
 }
