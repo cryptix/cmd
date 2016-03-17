@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/dustin/go-humanize"
 )
 
 func uploadHandler(resp http.ResponseWriter, req *http.Request) {
@@ -32,6 +34,6 @@ func uploadHandler(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Printf("Got File: %s Len: %d\n", header.Filename, n)
+	log.Printf("Got File: %s Len: %s\n", header.Filename, humanize.Bytes(n))
 	fmt.Fprintf(resp, `{"data":"%s", "status":%d}`, "upload complete", http.StatusCreated)
 }

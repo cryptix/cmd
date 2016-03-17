@@ -93,4 +93,3 @@ func checkFatal(err error) {
 		log.Fatal(err)
 	}
 }
-}

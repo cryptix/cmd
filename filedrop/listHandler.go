@@ -5,15 +5,19 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/dustin/go-humanize"
 	"github.com/shurcooL/httpfs/html/vfstemplate"
 )
 
 var (
-	jsTmpl   = template.Must(vfstemplate.ParseFiles(assets, nil, "/js.tmpl"))
-	nojsTmpl = template.Must(vfstemplate.ParseFiles(assets, nil, "/nojs.tmpl"))
+	tplFuncs = template.FuncMap{
+		"bytes": func(s int64) string { return humanize.Bytes(uint64(s)) },
+	}
+
+	tpl = template.Must(vfstemplate.ParseGlob(assets, template.New("base").Funcs(tplFuncs), "/*.tmpl"))
 )
 
-func listHandler(resp http.ResponseWriter, req *http.Request) error {
+func jsHandler(resp http.ResponseWriter, req *http.Request) error {
 	dir, err := os.Open(*dumpDir)
 	if err != nil {
 		return err
@@ -25,9 +29,9 @@ func listHandler(resp http.ResponseWriter, req *http.Request) error {
 		return err
 	}
 
-	return jsTmpl.Execute(resp, fileInfos)
+	return tpl.Lookup("js.tmpl").Execute(resp, fileInfos)
 }
 
 func nojsHandler(resp http.ResponseWriter, req *http.Request) error {
-	return nojsTmpl.Execute(resp, nil)
+	return tpl.Lookup("nojs.tmpl").Execute(resp, nil)
 }
