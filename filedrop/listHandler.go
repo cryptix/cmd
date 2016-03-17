@@ -7,6 +7,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/shurcooL/httpfs/html/vfstemplate"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -17,7 +18,7 @@ var (
 	tpl = template.Must(vfstemplate.ParseGlob(assets, template.New("base").Funcs(tplFuncs), "/*.tmpl"))
 )
 
-func jsHandler(resp http.ResponseWriter, req *http.Request) error {
+func jsHandler(ctx context.Context, resp http.ResponseWriter, req *http.Request) error {
 	dir, err := os.Open(*dumpDir)
 	if err != nil {
 		return err
@@ -32,6 +33,6 @@ func jsHandler(resp http.ResponseWriter, req *http.Request) error {
 	return tpl.Lookup("js.tmpl").Execute(resp, fileInfos)
 }
 
-func nojsHandler(resp http.ResponseWriter, req *http.Request) error {
+func nojsHandler(ctx context.Context, resp http.ResponseWriter, req *http.Request) error {
 	return tpl.Lookup("nojs.tmpl").Execute(resp, nil)
 }

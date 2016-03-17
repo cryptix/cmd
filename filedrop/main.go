@@ -14,11 +14,13 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"time"
 
-	"github.com/codegangsta/negroni"
 	"github.com/cryptix/go/http/render"
 	"github.com/goji/httpauth"
+	"github.com/rs/xaccess"
+	"github.com/rs/xhandler"
+	"github.com/rs/xlog"
+	"github.com/rs/xmux"
 	"github.com/shurcooL/go/gzip_file_server"
 )
 
@@ -33,30 +35,44 @@ var (
 
 	sslKey = flag.String("key", "", "Key-file for SSL connections")
 	sslCrt = flag.String("crt", "", "Certificate for SSL connections")
-
-	progStart = time.Now()
 )
 
 func main() {
 	flag.Parse()
 
-	mux := http.NewServeMux()
+	c := xhandler.Chain{}
 
-	mux.Handle("/js", render.HTML(jsHandler))
-	mux.Handle("/nojs", render.HTML(nojsHandler))
-	mux.Handle("/downloadAll", render.Binary(zipDownloadHandler))
-	mux.HandleFunc("/upload", uploadHandler)
+	hostName, _ := os.Hostname()
+	conf := xlog.Config{
+		Fields: xlog.F{
+			"role": "filedrop",
+			"host": hostName,
+		},
+	}
 
-	mux.Handle("/assets/", http.StripPrefix("/assets/", gzip_file_server.New(assets)))
-	mux.Handle("/", http.FileServer(http.Dir(*dumpDir)))
+	c.UseC(xlog.NewHandler(conf))
 
-	n := negroni.New()
-	n.Use(negroni.NewRecovery())
-	n.Use(negroni.NewLogger())
+	// Plug the xlog handler's input to Go's default logger
+	log.SetFlags(0)
+	log.SetOutput(xlog.New(conf))
+
+	c.UseC(xlog.RemoteAddrHandler("ip"))
+	c.UseC(xlog.UserAgentHandler("user_agent"))
+	c.UseC(xlog.RefererHandler("referer"))
+	c.UseC(xlog.RequestIDHandler("req_id", "Request-Id"))
+	c.UseC(xaccess.NewHandler())
+
+	mux := xmux.New()
+	mux.GET("/js", render.HTML(jsHandler))
+	mux.GET("/nojs", render.HTML(nojsHandler))
+	mux.GET("/downloadAll", render.Binary(zipDownloadHandler))
+	mux.POST("/upload", xhandler.HandlerFuncC(uploadHandler))
+
+	mux.Handle("GET", "/assets/*filepath", http.StripPrefix("/assets/", gzip_file_server.New(assets)))
+	mux.Handle("GET", "/drop/*filepath", http.StripPrefix("/drop/", http.FileServer(http.Dir(*dumpDir))))
+
 	if *user != "" {
-		n.UseHandler(httpauth.SimpleBasicAuth(*user, *pass)(mux))
-	} else {
-		n.UseHandler(mux)
+		c.Use(httpauth.SimpleBasicAuth(*user, *pass))
 	}
 
 	if *port == "0" && os.Getenv("PORT") != "" {
@@ -67,7 +83,7 @@ func main() {
 	checkFatal(err)
 
 	var server http.Server
-	server.Handler = n
+	server.Handler = c.Handler(mux)
 
 	if *sslKey != "" {
 		tlsCfg := &tls.Config{}

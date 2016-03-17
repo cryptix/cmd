@@ -8,21 +8,25 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dustin/go-humanize"
+	"github.com/rs/xlog"
+	"golang.org/x/net/context"
 )
 
-func uploadHandler(resp http.ResponseWriter, req *http.Request) {
+func uploadHandler(ctx context.Context, resp http.ResponseWriter, req *http.Request) {
+	l := xlog.FromContext(ctx)
+	l.SetField("handler", "upload")
+
 	file, header, err := req.FormFile("fupload")
 	if err != nil {
 		http.Error(resp, err.Error(), http.StatusInternalServerError)
-		log.Printf("uploadHandler - req.FormFile - Error: %v\n", err)
+		l.Error("req.FormFile failed.", xlog.F{"err": err})
 		return
 	}
 
 	input, err := os.Create(filepath.Join(*dumpDir, header.Filename))
 	if err != nil {
 		http.Error(resp, err.Error(), http.StatusInternalServerError)
-		log.Printf("uploadHandler - os.Open - Error: %v\n", err)
+		l.Error("os.Open failed.", xlog.F{"err": err})
 		return
 	}
 	defer input.Close()
@@ -34,6 +38,6 @@ func uploadHandler(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Printf("Got File: %s Len: %s\n", header.Filename, humanize.Bytes(n))
+	l.Info("Upload complete", xlog.F{"name": header.Filename, "size": n})
 	fmt.Fprintf(resp, `{"data":"%s", "status":%d}`, "upload complete", http.StatusCreated)
 }

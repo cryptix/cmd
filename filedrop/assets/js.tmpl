@@ -32,13 +32,13 @@
 		<tbody>
 		{{range .}}
 			<tr>
-  			<td><a href="/{{.Name}}">{{.Name}}</a></td>
-  			{{if .IsDir}}
-                <td>Dir</td>
-  			{{else}}
-				<td>{{bytes .Size}}</td>
-  			{{end}}
-			</tr>
+                <td><a href="/drop/{{.Name}}">{{.Name}}</a></td>
+                {{if .IsDir}}
+                    <td>Dir</td>
+                {{else}}
+                    <td>{{bytes .Size}}</td>
+                {{end}}
+            </tr>
 		{{end}}
 		</tbody>
 		</table>
