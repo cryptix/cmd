@@ -1,50 +1,41 @@
-<!DOCTYPE html>
-<html>
-	<head>
-		<meta charset="utf-8">
-		<title>filedrop</title>
-		<script src="/assets/jquery-2.2.2.min.js" type="text/javascript"></script>
-		<link rel="stylesheet" href="/assets/bootstrap.min.css">
-		<script src="/assets/bootstrap.min.js" type="text/javascript"></script>
+{{define "title"}}FileDrop (js){{end}}
+{{define "assets"}}
 		<script src="/assets/bootstrapProgressbar.min.js" type="text/javascript"></script>
 		<script src="/assets/uploadui.js" type="text/javascript"></script>
-	</head>
-	<body>
-		<div class="container">
-		<h1>Upload File</h1>
-		<p>
-			Select File:
-			<input type='file' id='_file'>
-			<input type='button' id='_submit' value='Upload!'>
-		</p>
-		<div class="progress progress-striped active">
-			<div class="progress-bar progress-bar-striped" role="progressbar"></div>
-		</div>
+{{end}}
+{{define "content"}} 
+<h1>Upload File</h1>
+<p>
+    Select File:
+    <input type='file' id='_file'>
+    <input type='button' id='_submit' value='Upload!'>
+</p>
+<div class="progress progress-striped active">
+    <div class="progress-bar progress-bar-striped" role="progressbar"></div>
+</div>
 
-		<h1>List of files</h1>
-		<table class="table">
-		<thead>
-			<tr>
-				<td>Name</td>
-				<td>Size</td>
-			</tr>
-		</thead>
-		<tbody>
-		{{range .}}
-			<tr>
-                <td><a href="/drop/{{.Name}}">{{.Name}}</a></td>
-                {{if .IsDir}}
-                    <td>Dir</td>
-                {{else}}
-                    <td>{{bytes .Size}}</td>
-                {{end}}
-            </tr>
-		{{end}}
-		</tbody>
-		</table>
+<h1>List of files</h1>
+<table class="table">
+<thead>
+    <tr>
+        <td>Name</td>
+        <td>Size</td>
+    </tr>
+</thead>
+<tbody>
+{{range .}}
+    <tr>
+        <td><a href="/drop/{{.Name}}">{{.Name}}</a></td>
+        {{if .IsDir}}
+            <td>Dir</td>
+        {{else}}
+            <td>{{bytes .Size}}</td>
+        {{end}}
+    </tr>
+{{end}}
+</tbody>
+</table>
 
-		<h1>Zip of all files</h1>
-		<a href="/downloadAll">Download</a>
-		</div>
-</body>
-</html>
+<h1>Zip of all files</h1>
+<a href="/downloadAll">Download</a>
+{{end}}
