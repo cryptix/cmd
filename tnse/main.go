@@ -10,9 +10,10 @@ import (
 	"time"
 
 	"github.com/cryptix/go/logging"
+	"github.com/rs/xlog"
 )
 
-var log = logging.Logger("tnse")
+var log xlog.Logger
 
 // flags
 var (
@@ -20,6 +21,9 @@ var (
 )
 
 func main() {
+	logging.SetupLogging(nil)
+	log = logging.Logger("tnse")
+
 	flag.Parse()
 	if len(os.Args) < 2 {
 		log.Fatal("usage error")
@@ -35,20 +39,20 @@ func main() {
 	goTest.Stdout = out
 
 	start := time.Now()
-	log.Debugln("starting 'go test'")
+	log.Debug("starting 'go test'")
 	var passed bool
 	err = goTest.Run()
 	done := time.Now()
 	if err != nil {
-		log.WithField("err", err.Error()).Warning("run failed")
+		log.SetField("err", err)
+		log.Warn("run failed")
 	} else {
 		passed = true
 	}
 
 	err = notify(passed, buf.String())
 	logging.CheckFatal(err)
-	log.WithFields(map[string]interface{}{
-		"took":   done.Sub(start),
-		"passed": passed,
-	}).Infoln("'go test' finished")
+	log.SetField("took", done.Sub(start))
+	log.SetField("passed", passed)
+	log.Info("'go test' finished")
 }
