@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+	"github.com/cryptix/go-muxrpc"
 	"github.com/cryptix/go-shs"
 	"github.com/keks/boxstream"
 )
@@ -113,16 +113,20 @@ func run(ctx *cli.Context) {
 }
 
 func beepBoop(conn net.Conn) {
-	// TODO: should work once boxstream key derivation works correctly
-	//c := muxrpc.NewClient(conn)
-	//var reply interface{}
-	//err := c.Call("whoami", nil, &reply)
-	//check(err)
-	//time.Sleep(1 * time.Second)
+	c := muxrpc.NewClient(conn)
+	var reply interface{}
+	err := c.Call("whoami", nil, &reply)
+	check(err)
+	log.Println("whoami: %+v", reply)
+
+	for {
+		log.Println("ping...:")
+		time.Sleep(1 * time.Second)
+	}
 
 	// echo!
-	_, err := io.Copy(conn, conn)
-	check(err)
+	//_, err := io.Copy(conn, conn)
+	//check(err)
 }
 
 func check(err error) {
