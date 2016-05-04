@@ -15,6 +15,7 @@ import (
 	"github.com/cryptix/go-muxrpc"
 	"github.com/cryptix/go-shs"
 	"github.com/keks/boxstream"
+	"github.com/shurcooL/go-goon"
 )
 
 var sbotAppKey []byte
@@ -66,16 +67,11 @@ func run(ctx *cli.Context) {
 		err = shs.Server(servState, conn)
 		check(err)
 
-		log.Print("hands have been shaking!")
 		en_k, en_n := servState.GetBoxstreamEncKeys()
 		conn_w := boxstream.NewBoxer(conn, &en_n, &en_k)
-		log.Printf("en_n:%x", en_n)
-		log.Printf("en_k:%x", en_k)
 
 		de_k, de_n := servState.GetBoxstreamDecKeys()
 		conn_r := boxstream.NewUnboxer(conn, &de_n, &de_k)
-		log.Printf("de_n:%x", de_n)
-		log.Printf("de_k:%x", de_k)
 
 		boxed := Conn{conn_r, conn_w, conn}
 
@@ -96,16 +92,11 @@ func run(ctx *cli.Context) {
 
 	check(shs.Client(state, conn))
 
-	log.Print("hands have been shaking!")
 	en_k, en_n := state.GetBoxstreamEncKeys()
 	conn_w := boxstream.NewBoxer(conn, &en_n, &en_k)
-	log.Printf("en_n:%x", en_n)
-	log.Printf("en_k:%x", en_k)
 
 	de_k, de_n := state.GetBoxstreamDecKeys()
 	conn_r := boxstream.NewUnboxer(conn, &de_n, &de_k)
-	log.Printf("de_n:%x", de_n)
-	log.Printf("de_k:%x", de_k)
 
 	boxed := Conn{conn_r, conn_w, conn}
 
@@ -114,13 +105,37 @@ func run(ctx *cli.Context) {
 
 func beepBoop(conn net.Conn) {
 	c := muxrpc.NewClient(conn)
-	var reply interface{}
-	err := c.Call("whoami", nil, &reply)
-	check(err)
-	log.Println("whoami: %+v", reply)
-
+	/*
+		go func() {
+			reply := make([]map[string]interface{}, 0, 10)
+			err := c.SyncSource("createLogStream", nil, &reply)
+			check(err)
+			log.Println("got log stream..!")
+		}()
+		go func() {
+			for {
+				log.Println("who am i..?")
+				var reply interface{}
+				if err := c.Call("whoami", nil, &reply); err != nil {
+					log.Println("no whoami")
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}()
+	*/
+	go func() {
+		arg := map[string]interface{}{
+			"id": "@p13zSAiOpguI9nsawkGijsnMfWmFd5rlUNpzekEE+vI=.ed25519",
+		}
+		reply := make([]map[string]interface{}, 0, 10)
+		err := c.SyncSource("createHistoryStream", arg, &reply)
+		check(err)
+		log.Println("got hist stream..!")
+		goon.Dump(reply)
+	}()
 	for {
-		log.Println("ping...:")
+		log.Println("where am i..?")
 		time.Sleep(1 * time.Second)
 	}
 
