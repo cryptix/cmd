@@ -13,8 +13,8 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/cryptix/go-muxrpc"
-	"github.com/cryptix/go-shs"
-	"github.com/keks/boxstream"
+	"github.com/cryptix/secretstream"
+	"github.com/cryptix/secretstream/secrethandshake"
 	"github.com/shurcooL/go-goon"
 )
 
@@ -55,85 +55,73 @@ func run(ctx *cli.Context) {
 
 	localKey := mustLoadKeyPair(ctx.String("key"))
 
+	var conn net.Conn
 	if ctx.Bool("listen") {
-		l, err := net.Listen("tcp", ctx.Args().Get(0))
-		check(err)
-		conn, err := l.Accept()
+		srv, err := secretstream.NewServer(localKey, sbotAppKey)
 		check(err)
 
-		servState, err := shs.NewServerState(sbotAppKey, localKey)
+		l, err := srv.Listen("tcp", ctx.Args().Get(0))
 		check(err)
 
-		err = shs.Server(servState, conn)
+		conn, err = l.Accept()
+		check(err)
+	} else {
+		var remotepub [32]byte
+		rp, err := base64.StdEncoding.DecodeString(strings.TrimSuffix(ctx.Args().Get(1), ".ed25519"))
+		check(err)
+		copy(remotepub[:], rp)
+
+		c, err := secretstream.NewClient(localKey, sbotAppKey)
 		check(err)
 
-		en_k, en_n := servState.GetBoxstreamEncKeys()
-		conn_w := boxstream.NewBoxer(conn, &en_n, &en_k)
+		d, err := c.NewDialer(remotepub)
+		check(err)
 
-		de_k, de_n := servState.GetBoxstreamDecKeys()
-		conn_r := boxstream.NewUnboxer(conn, &de_n, &de_k)
-
-		boxed := Conn{conn_r, conn_w, conn}
-
-		beepBoop(boxed)
-		return
+		conn, err = d("tcp", ctx.Args().Get(0))
+		check(err)
 	}
 
-	var remotepub [32]byte
-	rp, err := base64.StdEncoding.DecodeString(strings.TrimSuffix(ctx.Args().Get(1), ".ed25519"))
-	check(err)
-	copy(remotepub[:], rp)
-
-	conn, err := net.Dial("tcp", ctx.Args().Get(0))
-	check(err)
-
-	state, err := shs.NewClientState(sbotAppKey, localKey, remotepub)
-	check(err)
-
-	check(shs.Client(state, conn))
-
-	en_k, en_n := state.GetBoxstreamEncKeys()
-	conn_w := boxstream.NewBoxer(conn, &en_n, &en_k)
-
-	de_k, de_n := state.GetBoxstreamDecKeys()
-	conn_r := boxstream.NewUnboxer(conn, &de_n, &de_k)
-
-	boxed := Conn{conn_r, conn_w, conn}
-
-	beepBoop(boxed)
+	beepBoop(conn)
 }
 
 func beepBoop(conn net.Conn) {
+	// c := muxrpc.NewClient(codec.Wrap(conn))
 	c := muxrpc.NewClient(conn)
-	/*
-		go func() {
-			reply := make([]map[string]interface{}, 0, 10)
-			err := c.SyncSource("createLogStream", nil, &reply)
-			check(err)
-			log.Println("got log stream..!")
-		}()
-		go func() {
-			for {
-				log.Println("who am i..?")
-				var reply interface{}
-				if err := c.Call("whoami", nil, &reply); err != nil {
-					log.Println("no whoami")
-					break
-				}
-				time.Sleep(1 * time.Second)
-			}
-		}()
-	*/
-	go func() {
-		arg := map[string]interface{}{
-			"id": "@p13zSAiOpguI9nsawkGijsnMfWmFd5rlUNpzekEE+vI=.ed25519",
-		}
-		reply := make([]map[string]interface{}, 0, 10)
-		err := c.SyncSource("createHistoryStream", arg, &reply)
-		check(err)
-		log.Println("got hist stream..!")
-		goon.Dump(reply)
-	}()
+
+	// go func() {
+	// 	reply := make([]map[string]interface{}, 0, 10)
+	// 	err := c.SyncSource("createLogStream", nil, &reply)
+	// 	check(err)
+	// 	log.Println("got log stream..!")
+	// 	for _, p := range reply {
+	// 		goon.Dump(p)
+	// 	}
+	// }()
+
+	// go func() {
+	// 	arg := map[string]interface{}{
+	// 		"id": "@p13zSAiOpguI9nsawkGijsnMfWmFd5rlUNpzekEE+vI=.ed25519",
+	// 	}
+	// 	reply := make([]map[string]interface{}, 0, 10)
+	// 	err := c.SyncSource("createHistoryStream", arg, &reply)
+	// 	check(err)
+	// 	log.Println("got hist stream..!")
+	// 	goon.Dump(reply)
+	// }()
+
+	// go func() {
+	// 	for {
+	// 		log.Println("who am i..?")
+	// 		var reply map[string]interface{}
+	// 		if err := c.Call("whoami", nil, &reply); err != nil {
+	// 			log.Println("no whoami")
+	// 			break
+	// 		}
+	// 		goon.Dump(reply)
+	// 		time.Sleep(1 * time.Second)
+	// 	}
+	// }()
+
 	for {
 		log.Println("where am i..?")
 		time.Sleep(1 * time.Second)
@@ -150,7 +138,7 @@ func check(err error) {
 	}
 }
 
-func mustLoadKeyPair(fname string) shs.EdKeyPair {
+func mustLoadKeyPair(fname string) secrethandshake.EdKeyPair {
 	f, err := os.Open(fname)
 	check(err)
 
@@ -169,7 +157,7 @@ func mustLoadKeyPair(fname string) shs.EdKeyPair {
 	private, err := base64.StdEncoding.DecodeString(strings.TrimSuffix(sbotKey.Private, ".ed25519"))
 	check(err)
 
-	var kp shs.EdKeyPair
+	var kp secrethandshake.EdKeyPair
 	copy(kp.Public[:], public)
 	copy(kp.Secret[:], private)
 	return kp
