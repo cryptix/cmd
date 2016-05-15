@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/base64"
-	"encoding/json"
-	"log"
+	"errors"
+	"io"
 	"net"
 	"os"
 	"os/user"
@@ -12,153 +12,109 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/cryptix/go-muxrpc"
+	"github.com/cryptix/go/logging"
 	"github.com/cryptix/secretstream"
 	"github.com/cryptix/secretstream/secrethandshake"
-	"github.com/shurcooL/go-goon"
+	"github.com/dustin/go-humanize"
+	"github.com/miolini/datacounter"
+	"github.com/rs/xlog"
 )
 
-var sbotAppKey []byte
-var defaultKeyFile string
+var (
+	sbotAppKey     []byte
+	defaultKeyFile string
+	log            xlog.Logger
+)
 
 func init() {
-	var err error
-	sbotAppKey, err = base64.StdEncoding.DecodeString("1KHLiKZvAvjbY1ziZEHMXawbCEIM6qwjCDm3VYRan/s=")
-	check(err)
-
 	u, err := user.Current()
-	check(err)
+	logging.CheckFatal(err)
 
 	defaultKeyFile = filepath.Join(u.HomeDir, ".ssb", "secret")
-
 }
 
 func main() {
+	logging.SetupLogging(nil)
+	log = logging.Logger("scb")
+
 	app := cli.NewApp()
 	app.Name = "scb"
 	app.Usage = "securly boxes your cats from a to b"
+	app.Version = "0.1"
 	app.Action = run
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{Name: "listen,l"},
-		cli.StringFlag{Name: "key,k", Value: defaultKeyFile},
-		cli.StringFlag{Name: "port,p", Value: "undefined", Usage: "the namespace to use"},
-		cli.DurationFlag{Name: "timeout,t", Value: time.Minute},
-		cli.BoolFlag{Name: "verbose,vv", Usage: "print gathered stats to stderr"},
+		cli.StringFlag{Name: "appKey", Value: "sAI1D9LtA6TQj3qj59/3bdKqiv4QQC3DY6/fWzBTDr8=", Usage: "the shared secret/mac key (in base64, plz)"},
+		cli.StringFlag{Name: "key,k", Value: defaultKeyFile, Usage: "the ssb keyfile to load the local keypair from"},
 	}
 	app.Run(os.Args)
 }
 
-func run(ctx *cli.Context) {
-	log.SetOutput(os.Stderr)
-	if ctx.Bool("verbose") {
-	}
+func run(ctx *cli.Context) error {
 
-	localKey := mustLoadKeyPair(ctx.String("key"))
+	localKey, err := secrethandshake.LoadSSBKeyPair(ctx.String("key"))
+	logging.CheckFatal(err)
+
+	sbotAppKey, err = base64.StdEncoding.DecodeString(ctx.String("appKey"))
+	logging.CheckFatal(err)
 
 	var conn net.Conn
 	if ctx.Bool("listen") {
-		srv, err := secretstream.NewServer(localKey, sbotAppKey)
-		check(err)
+		srv, err := secretstream.NewServer(*localKey, sbotAppKey)
+		logging.CheckFatal(err)
 
 		l, err := srv.Listen("tcp", ctx.Args().Get(0))
-		check(err)
-
+		logging.CheckFatal(err)
+		log.Info("Listening.", xlog.F{
+			"ID":   base64.StdEncoding.EncodeToString(localKey.Public[:]),
+			"Addr": l.Addr().String(),
+		})
 		conn, err = l.Accept()
-		check(err)
+		logging.CheckFatal(err)
+
 	} else {
 		var remotepub [32]byte
 		rp, err := base64.StdEncoding.DecodeString(strings.TrimSuffix(ctx.Args().Get(1), ".ed25519"))
-		check(err)
+		logging.CheckFatal(err)
 		copy(remotepub[:], rp)
 
-		c, err := secretstream.NewClient(localKey, sbotAppKey)
-		check(err)
+		c, err := secretstream.NewClient(*localKey, sbotAppKey)
+		logging.CheckFatal(err)
 
 		d, err := c.NewDialer(remotepub)
-		check(err)
+		logging.CheckFatal(err)
 
 		conn, err = d("tcp", ctx.Args().Get(0))
-		check(err)
+		logging.CheckFatal(err)
 	}
+	start := time.Now()
 
-	beepBoop(conn)
-}
-
-func beepBoop(conn net.Conn) {
-	// c := muxrpc.NewClient(codec.Wrap(conn))
-	c := muxrpc.NewClient(conn)
-
-	// go func() {
-	// 	reply := make([]map[string]interface{}, 0, 10)
-	// 	err := c.SyncSource("createLogStream", nil, &reply)
-	// 	check(err)
-	// 	log.Println("got log stream..!")
-	// 	for _, p := range reply {
-	// 		goon.Dump(p)
-	// 	}
-	// }()
-
-	// go func() {
-	// 	arg := map[string]interface{}{
-	// 		"id": "@p13zSAiOpguI9nsawkGijsnMfWmFd5rlUNpzekEE+vI=.ed25519",
-	// 	}
-	// 	reply := make([]map[string]interface{}, 0, 10)
-	// 	err := c.SyncSource("createHistoryStream", arg, &reply)
-	// 	check(err)
-	// 	log.Println("got hist stream..!")
-	// 	goon.Dump(reply)
-	// }()
-
-	// go func() {
-	// 	for {
-	// 		log.Println("who am i..?")
-	// 		var reply map[string]interface{}
-	// 		if err := c.Call("whoami", nil, &reply); err != nil {
-	// 			log.Println("no whoami")
-	// 			break
-	// 		}
-	// 		goon.Dump(reply)
-	// 		time.Sleep(1 * time.Second)
-	// 	}
-	// }()
-
-	for {
-		log.Println("where am i..?")
-		time.Sleep(1 * time.Second)
+	// showing off a little...
+	rem := conn.RemoteAddr()
+	shsAddr, ok := rem.(secretstream.Addr)
+	if !ok {
+		logging.CheckFatal(errors.New("could not cast remote address"))
 	}
+	log.Info("Connection established.", xlog.F{
+		"ID":   base64.StdEncoding.EncodeToString(shsAddr.PubKey()),
+		"Addr": shsAddr.Addr.String(),
+	})
 
-	// echo!
-	//_, err := io.Copy(conn, conn)
-	//check(err)
-}
+	var sentCounter, recvdCounter *datacounter.ReaderCounter
+	go func() {
+		sentCounter = datacounter.NewReaderCounter(os.Stdin)
+		_, err := io.Copy(conn, sentCounter)
+		logging.CheckFatal(err)
+		conn.Close()
+	}()
 
-func check(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
-}
+	recvdCounter = datacounter.NewReaderCounter(conn)
+	_, err = io.Copy(os.Stdout, recvdCounter)
 
-func mustLoadKeyPair(fname string) secrethandshake.EdKeyPair {
-	f, err := os.Open(fname)
-	check(err)
-
-	var sbotKey struct {
-		Curve   string `json:"curve"`
-		ID      string `json:"id"`
-		Private string `json:"private"`
-		Public  string `json:"public"`
-	}
-
-	check(json.NewDecoder(f).Decode(&sbotKey))
-
-	public, err := base64.StdEncoding.DecodeString(strings.TrimSuffix(sbotKey.Public, ".ed25519"))
-	check(err)
-
-	private, err := base64.StdEncoding.DecodeString(strings.TrimSuffix(sbotKey.Private, ".ed25519"))
-	check(err)
-
-	var kp secrethandshake.EdKeyPair
-	copy(kp.Public[:], public)
-	copy(kp.Secret[:], private)
-	return kp
+	log.Info("Copy done.", xlog.F{
+		"took": time.Since(start),
+		"sent": humanize.Bytes(sentCounter.Count()),
+		"rcvd": humanize.Bytes(recvdCounter.Count()),
+	})
+	return err
 }
