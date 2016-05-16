@@ -56,6 +56,28 @@ func main() {
 			Action: getCmd,
 		},
 		{
+			Name: "private",
+			Subcommands: []cli.Command{
+				{
+					Name:   "publish",
+					Usage:  "p",
+					Action: privatePublishCmd,
+					Flags: []cli.Flag{
+						cli.StringFlag{Name: "type", Value: "post"},
+						cli.StringFlag{Name: "text", Value: "Hello, World!"},
+						cli.StringFlag{Name: "root", Usage: "the ID of the first message of the thread"},
+						cli.StringFlag{Name: "branch", Usage: "the post ID that is beeing replied to"},
+						cli.StringSliceFlag{Name: "recps", Usage: "posting to these IDs privatly"},
+					},
+				},
+				{
+					Name:   "unbox",
+					Usage:  "u",
+					Action: privateUnboxCmd,
+				},
+			},
+		},
+		{
 			Name:   "publish",
 			Usage:  "p",
 			Action: publishCmd,
@@ -122,6 +144,60 @@ func initClient(ctx *cli.Context) error {
 		client = muxrpc.NewClient(conn)
 	}
 	return nil
+}
+
+func privatePublishCmd(ctx *cli.Context) error {
+	content := map[string]interface{}{
+		"text": ctx.String("text"),
+		"type": ctx.String("type"),
+	}
+	if r := ctx.String("root"); r != "" {
+		content["root"] = r
+		if b := ctx.String("branch"); b != "" {
+			content["branch"] = b
+		} else {
+			content["branch"] = r
+		}
+	}
+	recps := ctx.StringSlice("recps")
+	if len(recps) == 0 {
+		return errgo.Newf("private.publish: 0 recps.. that would be quite the lonely message..")
+	}
+	arg := map[string]interface{}{
+		"content": content,
+		"rcps":    recps,
+	}
+	var reply map[string]interface{}
+	err := client.Call("private.publish", arg, &reply)
+	if err != nil {
+		return errgo.Notef(err, "publish call failed.")
+	}
+	log.Println("private published..!")
+	goon.Dump(reply)
+	return client.Close()
+}
+
+func privateUnboxCmd(ctx *cli.Context) error {
+	id := ctx.Args().Get(0)
+	if id == "" {
+		return errgo.New("get: id can't be empty")
+	}
+	var getReply map[string]interface{}
+	if err := client.Call("get", id, &getReply); err != nil {
+		return errgo.Notef(err, "get call failed.")
+	}
+	log.Print("get:")
+	goon.Dump(getReply)
+
+	var reply map[string]interface{}
+	if err := client.Call("private.unbox", getReply["content"], &reply); err != nil {
+		return errgo.Notef(err, "get call failed.")
+	}
+
+	log.Print("unbox:")
+	goon.Dump(reply)
+
+	return client.Close()
 }
 
 func publishCmd(ctx *cli.Context) error {
