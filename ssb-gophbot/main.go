@@ -52,6 +52,10 @@ func main() {
 			Action: whoamiCmd,
 		},
 		{
+			Name:   "get",
+			Action: getCmd,
+		},
+		{
 			Name:   "publish",
 			Usage:  "p",
 			Action: publishCmd,
@@ -63,7 +67,10 @@ func main() {
 			},
 		},
 	}
-	app.Run(os.Args)
+	if err := app.Run(os.Args); err != nil {
+		log.Println("Error: ", err)
+	}
+
 }
 
 var client *muxrpc.Client
@@ -158,23 +165,39 @@ func createHistoryStreamCmd(ctx *cli.Context) error {
 	return client.Close()
 }
 
+func createLogStream(ctx *cli.Context) error {
+	reply := make([]map[string]interface{}, 0, 10)
+	err := client.SyncSource("createLogStream", nil, &reply)
+	if err != nil {
+		return errgo.Notef(err, "createLogStream call failed.")
+	}
+	log.Println("got log stream..!")
+	for _, p := range reply {
+		goon.Dump(p)
+	}
+	return client.Close()
+}
+
 func whoamiCmd(ctx *cli.Context) error {
-
-	// go func() {
-	// 	reply := make([]map[string]interface{}, 0, 10)
-	// 	err := c.SyncSource("createLogStream", nil, &reply)
-	// 	check(err)
-	// 	log.Println("got log stream..!")
-	// 	for _, p := range reply {
-	// 		goon.Dump(p)
-	// 	}
-	// }()
-
 	var reply map[string]interface{}
 	if err := client.Call("whoami", nil, &reply); err != nil {
 		return errgo.Notef(err, "whoami call failed.")
 	}
 	// goon.Dump(reply)
 	log.Print("ID:", reply["id"])
+	return client.Close()
+}
+
+func getCmd(ctx *cli.Context) error {
+	id := ctx.Args().Get(0)
+	if id == "" {
+		return errgo.New("get: id can't be empty")
+	}
+	var reply map[string]interface{}
+	if err := client.Call("get", id, &reply); err != nil {
+		return errgo.Notef(err, "get call failed.")
+	}
+	log.Print("get:")
+	goon.Dump(reply)
 	return client.Close()
 }
