@@ -2,19 +2,20 @@ package main
 
 import (
 	"encoding/base64"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/user"
 	"path/filepath"
 
-	"github.com/codegangsta/cli"
 	"github.com/cryptix/go-muxrpc"
 	"github.com/cryptix/go-muxrpc/codec"
 	"github.com/cryptix/secretstream"
 	"github.com/cryptix/secretstream/secrethandshake"
 	"github.com/shurcooL/go-goon"
 	"gopkg.in/errgo.v1"
+	"gopkg.in/urfave/cli.v2"
 )
 
 var sbotAppKey []byte
@@ -35,39 +36,84 @@ func init() {
 	defaultKeyFile = filepath.Join(u.HomeDir, ".ssb", "secret")
 }
 
+var Revision = "unset"
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "ssb-gophbot"
 	app.Usage = "what can I say? sbot in Go"
+
+	cli.AppHelpTemplate = `NAME:
+   {{.Name}} - {{.Usage}}
+USAGE:
+   {{.HelpName}} {{if .VisibleFlags}}[global options]{{end}}{{if .Commands}} command [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}
+   {{if .Commands}}
+COMMANDS:
+{{range .Commands}}{{if not .HideHelp}}   {{join .Names ", "}}{{ "\t" }}{{.Usage}}{{ "\n" }}{{end}}{{end}}{{end}}{{if .VisibleFlags}}
+GLOBAL OPTIONS:
+   {{range .VisibleFlags}}{{.}}
+   {{end}}{{end}}
+VERSION:
+   {{.Version}}
+`
+
+	cli.CommandHelpTemplate = `NAME:
+   {{.Name}} - {{.Usage}}
+USAGE:
+   {{.HelpName}} [global options] {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}
+
+{{.UsageText}}
+`
+
+	cli.VersionPrinter = func(c *cli.Context) {
+		// go install -ldflags="-X main.Revision=$(git rev-parse HEAD)"
+		fmt.Printf("%s ( rev: %s )\n", c.App.Version, Revision)
+	}
+	app.Version = "alpha1"
+
 	app.Flags = []cli.Flag{
-		cli.StringFlag{Name: "addr", Value: "localhost:8008", Usage: "tcp address of the sbot to connect to (or listen on)"},
-		cli.StringFlag{Name: "remoteKey", Value: "", Usage: "the remote pubkey you are connecting to (by default the local key)"},
-		cli.StringFlag{Name: "key,k", Value: defaultKeyFile},
-		cli.BoolFlag{Name: "verbose,vv", Usage: "print muxrpc packets"},
+		&cli.StringFlag{Name: "addr", Value: "localhost:8008", Usage: "tcp address of the sbot to connect to (or listen on)"},
+		&cli.StringFlag{Name: "remoteKey", Value: "", Usage: "the remote pubkey you are connecting to (by default the local key)"},
+		&cli.StringFlag{Name: "key,k", Value: defaultKeyFile},
+		&cli.BoolFlag{Name: "verbose,vv", Usage: "print muxrpc packets"},
 	}
 	app.Before = initClient
-	app.Commands = []cli.Command{
+	app.Commands = []*cli.Command{
 		{
-			Name:   "whoami",
-			Action: whoamiCmd,
+			Name:   "hist",
+			Action: createLogStream,
 		},
 		{
-			Name:   "get",
-			Action: getCmd,
+			Name:   "call",
+			Action: callCmd,
+			Usage:  "make an dump* async call",
+			UsageText: `SUPPORTS:
+* whoami
+* latestSequence
+* getLatest
+* get
+* blobs.(has|want|rm|wants)
+* gossip.(peers|add|connect)
+
+
+see https://scuttlebot.io/apis/scuttlebot/ssb.html#createlogstream-source  for more
+
+CAVEAT: only one argument...
+`,
 		},
 		{
 			Name: "private",
-			Subcommands: []cli.Command{
+			Subcommands: []*cli.Command{
 				{
 					Name:   "publish",
 					Usage:  "p",
 					Action: privatePublishCmd,
 					Flags: []cli.Flag{
-						cli.StringFlag{Name: "type", Value: "post"},
-						cli.StringFlag{Name: "text", Value: "Hello, World!"},
-						cli.StringFlag{Name: "root", Usage: "the ID of the first message of the thread"},
-						cli.StringFlag{Name: "branch", Usage: "the post ID that is beeing replied to"},
-						cli.StringSliceFlag{Name: "recps", Usage: "posting to these IDs privatly"},
+						&cli.StringFlag{Name: "type", Value: "post"},
+						&cli.StringFlag{Name: "text", Value: "Hello, World!"},
+						&cli.StringFlag{Name: "root", Usage: "the ID of the first message of the thread"},
+						&cli.StringFlag{Name: "branch", Usage: "the post ID that is beeing replied to"},
+						&cli.StringSliceFlag{Name: "recps", Usage: "posting to these IDs privatly"},
 					},
 				},
 				{
@@ -82,10 +128,10 @@ func main() {
 			Usage:  "p",
 			Action: publishCmd,
 			Flags: []cli.Flag{
-				cli.StringFlag{Name: "type", Value: "post"},
-				cli.StringFlag{Name: "text", Value: "Hello, World!"},
-				cli.StringFlag{Name: "root", Value: "", Usage: "the ID of the first message of the thread"},
-				cli.StringFlag{Name: "branch", Value: "", Usage: "the post ID that is beeing replied to"},
+				&cli.StringFlag{Name: "type", Value: "post"},
+				&cli.StringFlag{Name: "text", Value: "Hello, World!"},
+				&cli.StringFlag{Name: "root", Value: "", Usage: "the ID of the first message of the thread"},
+				&cli.StringFlag{Name: "branch", Value: "", Usage: "the post ID that is beeing replied to"},
 			},
 		},
 	}
@@ -226,12 +272,13 @@ func publishCmd(ctx *cli.Context) error {
 func createHistoryStreamCmd(ctx *cli.Context) error {
 	id := ctx.Args().Get(0)
 	if id == "" {
-		return errgo.New("post: id can't be empty")
+		return errgo.New("createHist: id can't be empty")
 	}
 	arg := map[string]interface{}{
 		"content": id,
 	}
 	reply := make([]map[string]interface{}, 0, 10)
+
 	err := client.SyncSource("createHistoryStream", arg, &reply)
 	if err != nil {
 		return errgo.Notef(err, "createHistoryStream call failed.")
@@ -253,27 +300,17 @@ func createLogStream(ctx *cli.Context) error {
 	}
 	return client.Close()
 }
-
-func whoamiCmd(ctx *cli.Context) error {
-	var reply map[string]interface{}
-	if err := client.Call("whoami", nil, &reply); err != nil {
-		return errgo.Notef(err, "whoami call failed.")
+func callCmd(ctx *cli.Context) error {
+	cmd := ctx.Args().Get(0)
+	if cmd == "" {
+		return errgo.New("call: cmd can't be empty")
 	}
-	// goon.Dump(reply)
-	log.Print("ID:", reply["id"])
-	return client.Close()
-}
-
-func getCmd(ctx *cli.Context) error {
-	id := ctx.Args().Get(0)
-	if id == "" {
-		return errgo.New("get: id can't be empty")
+	arg := ctx.Args().Get(1)
+	var reply interface{}
+	if err := client.Call(cmd, arg, &reply); err != nil {
+		return errgo.Notef(err, "%s: call failed.", cmd)
 	}
-	var reply map[string]interface{}
-	if err := client.Call("get", id, &reply); err != nil {
-		return errgo.Notef(err, "get call failed.")
-	}
-	log.Print("get:")
+	log.Print("call:")
 	goon.Dump(reply)
 	return client.Close()
 }
