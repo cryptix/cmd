@@ -6,11 +6,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"golang.org/x/net/context"
 )
 
-func zipDownloadHandler(ctx context.Context, resp http.ResponseWriter, req *http.Request) error {
+func zipDownloadHandler(resp http.ResponseWriter, req *http.Request) error {
 	dir, err := os.Open(*dumpDir)
 	if err != nil {
 		return err

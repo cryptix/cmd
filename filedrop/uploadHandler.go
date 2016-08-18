@@ -9,11 +9,10 @@ import (
 	"path/filepath"
 
 	"github.com/rs/xlog"
-	"golang.org/x/net/context"
 )
 
-func uploadHandler(ctx context.Context, resp http.ResponseWriter, req *http.Request) {
-	l := xlog.FromContext(ctx)
+func uploadHandler(resp http.ResponseWriter, req *http.Request) {
+	l := xlog.FromContext(req.Context())
 	l.SetField("handler", "upload")
 
 	file, header, err := req.FormFile("fupload")
