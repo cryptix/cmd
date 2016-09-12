@@ -21,11 +21,11 @@ import (
 	"github.com/dkumor/acmewrapper"
 	"github.com/dustin/go-humanize"
 	"github.com/goji/httpauth"
+	"github.com/gorilla/mux"
+	"github.com/justinas/alice"
 	"github.com/rs/xaccess"
-	"github.com/rs/xhandler"
 	"github.com/rs/xlog"
-	"github.com/rs/xmux"
-	"github.com/shurcooL/go/gzip_file_server"
+	"github.com/shurcooL/httpgzip"
 )
 
 var (
@@ -45,53 +45,46 @@ var (
 func main() {
 	flag.Parse()
 
-	c := xhandler.Chain{}
+	logging.SetupLogging(nil)
 
-	hostName, _ := os.Hostname()
-	conf := xlog.Config{
-		Output: xlog.NewConsoleOutput(),
-		Fields: xlog.F{
-			"role": "filedrop",
-			"host": hostName,
-		},
-	}
-	logging.SetupLogging(&conf)
-
-	c.UseC(xlog.NewHandler(conf))
-
-	c.UseC(xlog.RemoteAddrHandler("ip"))
-	c.UseC(xlog.UserAgentHandler("user_agent"))
-	c.UseC(xlog.RefererHandler("referer"))
-	c.UseC(xlog.RequestIDHandler("req_id", "Request-Id"))
-	c.UseC(xaccess.NewHandler())
+	chain := alice.New(
+		xlog.RemoteAddrHandler("ip"),
+		xlog.UserAgentHandler("user_agent"),
+		xlog.RefererHandler("referer"),
+		xlog.RequestIDHandler("req_id", "Request-Id"),
+		xaccess.NewHandler())
+	/*
+		c.Use(xlog.NewHandler(conf))
+	*/
 	if *user != "" {
-		c.Use(httpauth.SimpleBasicAuth(*user, *pass))
+		chain = chain.Append(httpauth.SimpleBasicAuth(*user, *pass))
 	}
 
-	ren, err := render.New(assets, "base.tmpl",
+	ren, err := render.New(assets,
+		render.BaseTemplate("base.tmpl"),
 		render.AddTemplates("js.tmpl", "nojs.tmpl", "base.tmpl"),
 		render.FuncMap(template.FuncMap{
 			"bytes": func(s int64) string { return humanize.Bytes(uint64(s)) },
 		}),
 	)
-	checkFatal(err)
+	logging.CheckFatal(err)
 
 	if !production {
-		c.UseC(ren.GetReloader())
+		chain = chain.Append(ren.GetReloader())
 	}
 
-	mux := xmux.New()
-	mux.GET("/", ren.StaticHTML("base.tmpl"))
-	mux.GET("/js", ren.HTML("js.tmpl", jsHandler))
-	mux.GET("/nojs", ren.StaticHTML("nojs.tmpl"))
-	mux.GET("/downloadAll", render.Binary(zipDownloadHandler))
-	mux.POST("/upload", xhandler.HandlerFuncC(uploadHandler))
+	mux := mux.NewRouter()
+	mux.Handle("/", ren.StaticHTML("base.tmpl"))
+	mux.HandleFunc("/js", ren.HTML("js.tmpl", jsHandler))
+	mux.Handle("/nojs", ren.StaticHTML("nojs.tmpl"))
+	mux.Handle("/downloadAll", render.Binary(zipDownloadHandler))
+	mux.HandleFunc("/upload", uploadHandler).Methods("POST")
 
-	mux.Handle("GET", "/assets/*filepath", http.StripPrefix("/assets/", gzip_file_server.New(assets)))
-	mux.Handle("GET", "/drop/*filepath", http.StripPrefix("/drop/", http.FileServer(http.Dir(*dumpDir))))
+	mux.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", httpgzip.FileServer(assets, httpgzip.FileServerOptions{})))
+	mux.PathPrefix("/drop/").Handler(http.StripPrefix("/drop/", http.FileServer(http.Dir(*dumpDir))))
 
 	var server http.Server
-	server.Handler = c.Handler(mux)
+	server.Handler = chain.Then(mux)
 
 	var l net.Listener
 	if *ssl {
@@ -108,9 +101,9 @@ func main() {
 
 			TOSCallback: acmewrapper.TOSAgree,
 		})
-		checkFatal(err)
+		logging.CheckFatal(err)
 		l, err = tls.Listen("tcp", ":443", w.TLSConfig())
-		checkFatal(err)
+		logging.CheckFatal(err)
 		server.Addr = ":443"
 		server.TLSConfig = w.TLSConfig()
 		log.Printf("Serving at https://%s/", l.Addr())
@@ -120,15 +113,9 @@ func main() {
 		}
 
 		l, err = net.Listen("tcp", *host+":"+*port)
-		checkFatal(err)
+		logging.CheckFatal(err)
 		log.Printf("Serving at http://%s/", l.Addr())
 	}
 
-	checkFatal(server.Serve(l))
-}
-
-func checkFatal(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
+	logging.CheckFatal(server.Serve(l))
 }
