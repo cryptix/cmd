@@ -26,7 +26,7 @@ func runDec(c *cli.Context) {
 
 	ks := c.String("key")
 	if ks == "" {
-		logging.CheckFatal(fmt.Errorf("Keyfile can't be empty."))
+		logging.CheckFatal(fmt.Errorf("keyfile can't be empty"))
 	}
 
 	key, err := hex.DecodeString(ks)

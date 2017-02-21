@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -11,6 +12,7 @@ import (
 )
 
 func runEnc(c *cli.Context) {
+
 	inputFname := c.Args().First()
 
 	// open the input
@@ -22,7 +24,7 @@ func runEnc(c *cli.Context) {
 	key, err := crypt.GetKey(input)
 	logging.CheckFatal(err)
 
-	logging.Underlying.Infof("Input Key: %x", key)
+	log.Log("inputkey", fmt.Sprintf("%x", key))
 
 	_, err = input.Seek(0, 0)
 	logging.CheckFatal(err)

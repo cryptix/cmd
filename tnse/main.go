@@ -4,16 +4,17 @@ package main
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"time"
 
 	"github.com/cryptix/go/logging"
-	"github.com/rs/xlog"
+	kitlog "github.com/go-kit/kit/log"
 )
 
-var log xlog.Logger
+var log *kitlog.Context
 
 // flags
 var (
@@ -26,7 +27,7 @@ func main() {
 
 	flag.Parse()
 	if len(os.Args) < 2 {
-		log.Fatal("usage error")
+		logging.CheckFatal(fmt.Errorf("usage error"))
 	}
 	goTest := exec.Command("go", "test", os.Args[1])
 	wd, err := os.Getwd()
@@ -39,20 +40,19 @@ func main() {
 	goTest.Stdout = out
 
 	start := time.Now()
-	log.Debug("starting 'go test'")
 	var passed bool
 	err = goTest.Run()
 	done := time.Now()
 	if err != nil {
-		log.SetField("err", err)
-		log.Warn("run failed")
+		log = log.With("err", err)
+		log.Log("event", "run failed")
 	} else {
 		passed = true
 	}
 
 	err = notify(passed, buf.String())
 	logging.CheckFatal(err)
-	log.SetField("took", done.Sub(start))
-	log.SetField("passed", passed)
-	log.Info("'go test' finished")
+	log = log.With("took", done.Sub(start))
+	log = log.With("passed", passed)
+	log.Log("event", "'go test' finished")
 }

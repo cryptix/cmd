@@ -24,7 +24,11 @@ import (
 	"os"
 
 	"github.com/codegangsta/cli"
+	"github.com/cryptix/go/logging"
+	kitlog "github.com/go-kit/kit/log"
 )
+
+var log *kitlog.Context
 
 func main() {
 	app := cli.NewApp()
@@ -54,6 +58,7 @@ func main() {
 			},
 		},
 	}
-
+	logging.SetupLogging(nil)
+	log = logging.Logger(app.Name)
 	app.Run(os.Args)
 }

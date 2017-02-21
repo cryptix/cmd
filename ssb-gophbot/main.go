@@ -39,37 +39,15 @@ func init() {
 var Revision = "unset"
 
 func main() {
-	app := cli.NewApp()
-	app.Name = "ssb-gophbot"
-	app.Usage = "what can I say? sbot in Go"
-
-	cli.AppHelpTemplate = `NAME:
-   {{.Name}} - {{.Usage}}
-USAGE:
-   {{.HelpName}} {{if .VisibleFlags}}[global options]{{end}}{{if .Commands}} command [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}
-   {{if .Commands}}
-COMMANDS:
-{{range .Commands}}{{if not .HideHelp}}   {{join .Names ", "}}{{ "\t" }}{{.Usage}}{{ "\n" }}{{end}}{{end}}{{end}}{{if .VisibleFlags}}
-GLOBAL OPTIONS:
-   {{range .VisibleFlags}}{{.}}
-   {{end}}{{end}}
-VERSION:
-   {{.Version}}
-`
-
-	cli.CommandHelpTemplate = `NAME:
-   {{.Name}} - {{.Usage}}
-USAGE:
-   {{.HelpName}} [global options] {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}
-
-{{.UsageText}}
-`
-
+	app := cli.App{
+		Name:    "ssb-gophbot",
+		Usage:   "what can I say? sbot in Go",
+		Version: "alpha2",
+	}
 	cli.VersionPrinter = func(c *cli.Context) {
 		// go install -ldflags="-X main.Revision=$(git rev-parse HEAD)"
 		fmt.Printf("%s ( rev: %s )\n", c.App.Version, Revision)
 	}
-	app.Version = "alpha1"
 
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{Name: "addr", Value: "localhost:8008", Usage: "tcp address of the sbot to connect to (or listen on)"},

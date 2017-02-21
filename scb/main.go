@@ -16,14 +16,14 @@ import (
 	"github.com/cryptix/secretstream"
 	"github.com/cryptix/secretstream/secrethandshake"
 	"github.com/dustin/go-humanize"
+	kitlog "github.com/go-kit/kit/log"
 	"github.com/miolini/datacounter"
-	"github.com/rs/xlog"
 )
 
 var (
 	sbotAppKey     []byte
 	defaultKeyFile string
-	log            xlog.Logger
+	log            *kitlog.Context
 )
 
 func init() {
@@ -34,9 +34,6 @@ func init() {
 }
 
 func main() {
-	logging.SetupLogging(nil)
-	log = logging.Logger("scb")
-
 	app := cli.NewApp()
 	app.Name = "scb"
 	app.Usage = "securly boxes your cats from a to b"
@@ -47,6 +44,8 @@ func main() {
 		cli.StringFlag{Name: "appKey", Value: "sAI1D9LtA6TQj3qj59/3bdKqiv4QQC3DY6/fWzBTDr8=", Usage: "the shared secret/mac key (in base64, plz)"},
 		cli.StringFlag{Name: "key,k", Value: defaultKeyFile, Usage: "the ssb keyfile to load the local keypair from"},
 	}
+	logging.SetupLogging(nil)
+	log = logging.Logger(app.Name)
 	app.Run(os.Args)
 }
 
@@ -65,10 +64,11 @@ func run(ctx *cli.Context) error {
 
 		l, err := srv.Listen("tcp", ctx.Args().Get(0))
 		logging.CheckFatal(err)
-		log.Info("Listening.", xlog.F{
-			"ID":   base64.StdEncoding.EncodeToString(localKey.Public[:]),
-			"Addr": l.Addr().String(),
-		})
+
+		log.Log("event", "listening",
+			"id", base64.StdEncoding.EncodeToString(localKey.Public[:]),
+			"addr", l.Addr().String(),
+		)
 		conn, err = l.Accept()
 		logging.CheckFatal(err)
 
@@ -95,10 +95,10 @@ func run(ctx *cli.Context) error {
 	if !ok {
 		logging.CheckFatal(errors.New("could not cast remote address"))
 	}
-	log.Info("Connection established.", xlog.F{
-		"ID":   base64.StdEncoding.EncodeToString(shsAddr.PubKey()),
-		"Addr": shsAddr.Addr.String(),
-	})
+	log.Log("event", "connection established",
+		"id", base64.StdEncoding.EncodeToString(shsAddr.PubKey()),
+		"addr", shsAddr.Addr.String(),
+	)
 
 	var sentCounter, recvdCounter *datacounter.ReaderCounter
 	go func() {
@@ -111,10 +111,10 @@ func run(ctx *cli.Context) error {
 	recvdCounter = datacounter.NewReaderCounter(conn)
 	_, err = io.Copy(os.Stdout, recvdCounter)
 
-	log.Info("Copy done.", xlog.F{
-		"took": time.Since(start),
-		"sent": humanize.Bytes(sentCounter.Count()),
-		"rcvd": humanize.Bytes(recvdCounter.Count()),
-	})
+	log.Log("event", "copy done",
+		"took", time.Since(start),
+		"sent", humanize.Bytes(sentCounter.Count()),
+		"rcvd", humanize.Bytes(recvdCounter.Count()),
+	)
 	return err
 }

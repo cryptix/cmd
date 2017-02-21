@@ -10,8 +10,8 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"html/template"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -20,6 +20,7 @@ import (
 	"github.com/cryptix/go/logging"
 	"github.com/dkumor/acmewrapper"
 	"github.com/dustin/go-humanize"
+	kitlog "github.com/go-kit/kit/log"
 	"github.com/goji/httpauth"
 	"github.com/gorilla/mux"
 	"github.com/justinas/alice"
@@ -27,6 +28,8 @@ import (
 	"github.com/rs/xlog"
 	"github.com/shurcooL/httpgzip"
 )
+
+var log *kitlog.Context
 
 var (
 	host = flag.String("host", "localhost", "The hostname/ip to listen on.")
@@ -46,8 +49,10 @@ func main() {
 	flag.Parse()
 
 	logging.SetupLogging(nil)
+	log = logging.Logger("filedrop")
 
 	chain := alice.New(
+		// TODO: move to new logging
 		xlog.RemoteAddrHandler("ip"),
 		xlog.UserAgentHandler("user_agent"),
 		xlog.RefererHandler("referer"),
@@ -87,6 +92,7 @@ func main() {
 	server.Handler = chain.Then(mux)
 
 	var l net.Listener
+	var lisAddr string
 	if *ssl {
 		w, err := acmewrapper.New(acmewrapper.Config{
 			Domains: []string{*host},
@@ -106,7 +112,8 @@ func main() {
 		logging.CheckFatal(err)
 		server.Addr = ":443"
 		server.TLSConfig = w.TLSConfig()
-		log.Printf("Serving at https://%s/", l.Addr())
+		lisAddr = fmt.Sprintf("https://%s/", l.Addr())
+
 	} else {
 		if *port == "0" && os.Getenv("PORT") != "" {
 			*port = os.Getenv("PORT")
@@ -114,8 +121,8 @@ func main() {
 
 		l, err = net.Listen("tcp", *host+":"+*port)
 		logging.CheckFatal(err)
-		log.Printf("Serving at http://%s/", l.Addr())
+		lisAddr = fmt.Sprintf("http://%s/", l.Addr())
 	}
-
+	log.Log("event", "serving", "addr", lisAddr)
 	logging.CheckFatal(server.Serve(l))
 }

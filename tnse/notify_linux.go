@@ -24,6 +24,5 @@ func notify(passed bool, output string) error {
 	if err != nil {
 		return errgo.Notef(err, "notify-send failed: output: %s", out)
 	}
-	log.Debug("notify-send:", out)
 	return nil
 }
