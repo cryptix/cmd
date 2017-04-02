@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/cryptix/go-muxrpc"
 	"github.com/cryptix/go-muxrpc/codec"
@@ -150,7 +151,17 @@ func initClient(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		d, err := c.NewDialer(localKey.Public)
+		var remotPubKey = localKey.Public
+		if rk := ctx.String("remoteKey"); rk != "" {
+			rk = strings.TrimSuffix(rk, ".ed25519")
+			rk = strings.TrimPrefix(rk, "@")
+			rpk, err := base64.StdEncoding.DecodeString(rk)
+			if err != nil {
+				return errors.Wrapf(err, "ssb-gophbot: base64 decode of --remoteKey failed")
+			}
+			copy(remotPubKey[:], rpk)
+		}
+		d, err := c.NewDialer(remotPubKey)
 		if err != nil {
 			return err
 		}
