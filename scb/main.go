@@ -23,7 +23,7 @@ import (
 var (
 	sbotAppKey     []byte
 	defaultKeyFile string
-	log            *kitlog.Context
+	log            kitlog.Logger
 )
 
 func init() {
