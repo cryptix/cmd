@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/user"
@@ -13,24 +12,26 @@ import (
 	"github.com/cryptix/go-muxrpc/codec"
 	"github.com/cryptix/secretstream"
 	"github.com/cryptix/secretstream/secrethandshake"
+	"github.com/go-kit/kit/log"
+	"github.com/pkg/errors"
 	"github.com/shurcooL/go-goon"
-	"gopkg.in/errgo.v1"
 	"gopkg.in/urfave/cli.v2"
 )
 
 var sbotAppKey []byte
 var defaultKeyFile string
+var logger log.Logger
 
 func init() {
 	var err error
 	sbotAppKey, err = base64.StdEncoding.DecodeString("1KHLiKZvAvjbY1ziZEHMXawbCEIM6qwjCDm3VYRan/s=")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	u, err := user.Current()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	defaultKeyFile = filepath.Join(u.HomeDir, ".ssb", "secret")
@@ -39,6 +40,10 @@ func init() {
 var Revision = "unset"
 
 func main() {
+
+	logger = log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout))
+	logger = log.With(logger, "ts", log.DefaultTimestampUTC, "caller", log.DefaultCaller)
+
 	app := cli.App{
 		Name:    "ssb-gophbot",
 		Usage:   "what can I say? sbot in Go",
@@ -114,7 +119,7 @@ CAVEAT: only one argument...
 		},
 	}
 	if err := app.Run(os.Args); err != nil {
-		log.Println("Error: ", err)
+		logger.Log("error", err)
 	}
 
 }
@@ -122,25 +127,20 @@ CAVEAT: only one argument...
 var client *muxrpc.Client
 
 func initClient(ctx *cli.Context) error {
-	log.SetOutput(os.Stderr)
-
 	localKey, err := secrethandshake.LoadSSBKeyPair(ctx.String("key"))
 	if err != nil {
 		return err
 	}
-
 	var conn net.Conn
 	if ctx.Bool("listen") { // TODO: detect server command..
 		srv, err := secretstream.NewServer(*localKey, sbotAppKey)
 		if err != nil {
 			return err
 		}
-
 		l, err := srv.Listen("tcp", ctx.String("addr"))
 		if err != nil {
 			return err
 		}
-
 		conn, err = l.Accept()
 		if err != nil {
 			return err
@@ -150,22 +150,19 @@ func initClient(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-
 		d, err := c.NewDialer(localKey.Public)
 		if err != nil {
 			return err
 		}
-
 		conn, err = d("tcp", ctx.String("addr"))
 		if err != nil {
 			return err
 		}
 	}
-
 	if ctx.Bool("verbose") {
-		client = muxrpc.NewClient(codec.Wrap(conn))
+		client = muxrpc.NewClient(logger, codec.Wrap(logger, conn))
 	} else {
-		client = muxrpc.NewClient(conn)
+		client = muxrpc.NewClient(logger, conn)
 	}
 	return nil
 }
@@ -185,7 +182,7 @@ func privatePublishCmd(ctx *cli.Context) error {
 	}
 	recps := ctx.StringSlice("recps")
 	if len(recps) == 0 {
-		return errgo.Newf("private.publish: 0 recps.. that would be quite the lonely message..")
+		return errors.Errorf("private.publish: 0 recps.. that would be quite the lonely message..")
 	}
 	arg := map[string]interface{}{
 		"content": content,
@@ -194,9 +191,9 @@ func privatePublishCmd(ctx *cli.Context) error {
 	var reply map[string]interface{}
 	err := client.Call("private.publish", arg, &reply)
 	if err != nil {
-		return errgo.Notef(err, "publish call failed.")
+		return errors.Wrapf(err, "publish call failed.")
 	}
-	log.Println("private published..!")
+	logger.Log("event", "private published")
 	goon.Dump(reply)
 	return client.Close()
 }
@@ -204,23 +201,20 @@ func privatePublishCmd(ctx *cli.Context) error {
 func privateUnboxCmd(ctx *cli.Context) error {
 	id := ctx.Args().Get(0)
 	if id == "" {
-		return errgo.New("get: id can't be empty")
+		return errors.New("get: id can't be empty")
 	}
 	var getReply map[string]interface{}
 	if err := client.Call("get", id, &getReply); err != nil {
-		return errgo.Notef(err, "get call failed.")
+		return errors.Wrapf(err, "get call failed.")
 	}
-	log.Print("get:")
+	logger.Log("event", "get reply")
 	goon.Dump(getReply)
-
 	var reply map[string]interface{}
 	if err := client.Call("private.unbox", getReply["content"], &reply); err != nil {
-		return errgo.Notef(err, "get call failed.")
+		return errors.Wrapf(err, "get call failed.")
 	}
-
-	log.Print("unbox:")
+	logger.Log("event", "unboxed")
 	goon.Dump(reply)
-
 	return client.Close()
 }
 
@@ -240,9 +234,9 @@ func publishCmd(ctx *cli.Context) error {
 	var reply map[string]interface{}
 	err := client.Call("publish", arg, &reply)
 	if err != nil {
-		return errgo.Notef(err, "publish call failed.")
+		return errors.Wrapf(err, "publish call failed.")
 	}
-	log.Println("published..!")
+	logger.Log("event", "published")
 	goon.Dump(reply)
 	return client.Close()
 }
@@ -250,7 +244,7 @@ func publishCmd(ctx *cli.Context) error {
 func createHistoryStreamCmd(ctx *cli.Context) error {
 	id := ctx.Args().Get(0)
 	if id == "" {
-		return errgo.New("createHist: id can't be empty")
+		return errors.New("createHist: id can't be empty")
 	}
 	arg := map[string]interface{}{
 		"content": id,
@@ -259,9 +253,9 @@ func createHistoryStreamCmd(ctx *cli.Context) error {
 
 	err := client.SyncSource("createHistoryStream", arg, &reply)
 	if err != nil {
-		return errgo.Notef(err, "createHistoryStream call failed.")
+		return errors.Wrapf(err, "createHistoryStream call failed.")
 	}
-	log.Println("got hist stream..!")
+	logger.Log("event", "got hist stream..!")
 	goon.Dump(reply)
 	return client.Close()
 }
@@ -270,9 +264,9 @@ func createLogStream(ctx *cli.Context) error {
 	reply := make([]map[string]interface{}, 0, 10)
 	err := client.SyncSource("createLogStream", nil, &reply)
 	if err != nil {
-		return errgo.Notef(err, "createLogStream call failed.")
+		return errors.Wrapf(err, "createLogStream call failed.")
 	}
-	log.Println("got log stream..!")
+	logger.Log("event", "got log stream..!")
 	for _, p := range reply {
 		goon.Dump(p)
 	}
@@ -281,14 +275,14 @@ func createLogStream(ctx *cli.Context) error {
 func callCmd(ctx *cli.Context) error {
 	cmd := ctx.Args().Get(0)
 	if cmd == "" {
-		return errgo.New("call: cmd can't be empty")
+		return errors.New("call: cmd can't be empty")
 	}
 	arg := ctx.Args().Get(1)
 	var reply interface{}
 	if err := client.Call(cmd, arg, &reply); err != nil {
-		return errgo.Notef(err, "%s: call failed.", cmd)
+		return errors.Wrapf(err, "%s: call failed.", cmd)
 	}
-	log.Print("call:")
+	logger.Log("event", "call reply")
 	goon.Dump(reply)
 	return client.Close()
 }
