@@ -260,37 +260,38 @@ func createHistoryStreamCmd(ctx *cli.Context) error {
 	arg := map[string]interface{}{
 		"content": id,
 	}
-	reply := make([]map[string]interface{}, 0, 10)
-
-	err := client.SyncSource("createHistoryStream", arg, &reply)
-	if err != nil {
-		return errors.Wrapf(err, "createHistoryStream call failed.")
+	reply := make(chan map[string]interface{})
+	go func() {
+		for r := range reply {
+			goon.Dump(r)
+		}
+	}()
+	if err := client.Source("createHistoryStream", arg, reply); err != nil {
+		return errors.Wrap(err, "source stream call failed")
 	}
-	logger.Log("event", "got hist stream..!")
-	goon.Dump(reply)
 	return client.Close()
 }
 
 func createLogStream(ctx *cli.Context) error {
-	reply := make([]map[string]interface{}, 0, 10)
-	err := client.SyncSource("createLogStream", nil, &reply)
-	if err != nil {
-		return errors.Wrapf(err, "createLogStream call failed.")
-	}
-	logger.Log("event", "got log stream..!")
-	for _, p := range reply {
-		goon.Dump(p)
+	reply := make(chan map[string]interface{})
+	go func() {
+		for r := range reply {
+			goon.Dump(r)
+		}
+	}()
+	if err := client.Source("createLogStream", reply); err != nil {
+		return errors.Wrap(err, "source stream call failed")
 	}
 	return client.Close()
 }
+
 func callCmd(ctx *cli.Context) error {
 	cmd := ctx.Args().Get(0)
 	if cmd == "" {
 		return errors.New("call: cmd can't be empty")
 	}
-	arg := ctx.Args().Get(1)
 	var reply interface{}
-	if err := client.Call(cmd, arg, &reply); err != nil {
+	if err := client.Call(cmd, &reply, ctx.Args().Slice()); err != nil {
 		return errors.Wrapf(err, "%s: call failed.", cmd)
 	}
 	logger.Log("event", "call reply")
