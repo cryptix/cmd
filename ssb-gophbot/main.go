@@ -11,29 +11,30 @@ import (
 
 	"github.com/cryptix/go-muxrpc"
 	"github.com/cryptix/go-muxrpc/codec"
+	"github.com/cryptix/go/logging"
 	"github.com/cryptix/secretstream"
 	"github.com/cryptix/secretstream/secrethandshake"
-	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
 	"github.com/shurcooL/go-goon"
 	"gopkg.in/urfave/cli.v2"
 )
 
-var sbotAppKey []byte
-var defaultKeyFile string
-var logger log.Logger
+var (
+	sbotAppKey     []byte
+	defaultKeyFile string
+	client         *muxrpc.Client
+
+	log   logging.Interface
+	check = logging.CheckFatal
+)
 
 func init() {
 	var err error
 	sbotAppKey, err = base64.StdEncoding.DecodeString("1KHLiKZvAvjbY1ziZEHMXawbCEIM6qwjCDm3VYRan/s=")
-	if err != nil {
-		panic(err)
-	}
+	check(err)
 
 	u, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
+	check(err)
 
 	defaultKeyFile = filepath.Join(u.HomeDir, ".ssb", "secret")
 }
@@ -41,9 +42,8 @@ func init() {
 var Revision = "unset"
 
 func main() {
-
-	logger = log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout))
-	logger = log.With(logger, "ts", log.DefaultTimestampUTC, "caller", log.DefaultCaller)
+	logging.SetupLogging(nil)
+	log = logging.Logger("gophbot")
 
 	app := cli.App{
 		Name:    "ssb-gophbot",
@@ -64,8 +64,24 @@ func main() {
 	app.Before = initClient
 	app.Commands = []*cli.Command{
 		{
+			Name:   "log",
+			Action: logStreamCmd,
+		},
+		{
 			Name:   "hist",
-			Action: createLogStream,
+			Action: historyStreamCmd,
+			Flags: []cli.Flag{
+				&cli.IntFlag{Name: "limit", Value: -1},
+				&cli.IntFlag{Name: "seq", Value: 0},
+				&cli.BoolFlag{Name: "reverse"},
+				&cli.BoolFlag{Name: "live"},
+				&cli.BoolFlag{Name: "keys", Value: true},
+				&cli.BoolFlag{Name: "values", Value: true},
+			},
+		},
+		{
+			Name:   "qry",
+			Action: query,
 		},
 		{
 			Name:   "call",
@@ -119,13 +135,8 @@ CAVEAT: only one argument...
 			},
 		},
 	}
-	if err := app.Run(os.Args); err != nil {
-		logger.Log("error", err)
-	}
-
+	check(app.Run(os.Args))
 }
-
-var client *muxrpc.Client
 
 func initClient(ctx *cli.Context) error {
 	localKey, err := secrethandshake.LoadSSBKeyPair(ctx.String("key"))
@@ -171,10 +182,14 @@ func initClient(ctx *cli.Context) error {
 		}
 	}
 	if ctx.Bool("verbose") {
-		client = muxrpc.NewClient(logger, codec.Wrap(logger, conn))
+		client = muxrpc.NewClient(log, codec.Wrap(log, conn))
 	} else {
-		client = muxrpc.NewClient(logger, conn)
+		client = muxrpc.NewClient(log, conn)
 	}
+	go func() {
+		client.Handle()
+		log.Log("warning", "muxrpc disconnected")
+	}()
 	return nil
 }
 
@@ -204,7 +219,7 @@ func privatePublishCmd(ctx *cli.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "publish call failed.")
 	}
-	logger.Log("event", "private published")
+	log.Log("event", "private published")
 	goon.Dump(reply)
 	return client.Close()
 }
@@ -218,13 +233,13 @@ func privateUnboxCmd(ctx *cli.Context) error {
 	if err := client.Call("get", id, &getReply); err != nil {
 		return errors.Wrapf(err, "get call failed.")
 	}
-	logger.Log("event", "get reply")
+	log.Log("event", "get reply")
 	goon.Dump(getReply)
 	var reply map[string]interface{}
 	if err := client.Call("private.unbox", getReply["content"], &reply); err != nil {
 		return errors.Wrapf(err, "get call failed.")
 	}
-	logger.Log("event", "unboxed")
+	log.Log("event", "unboxed")
 	goon.Dump(reply)
 	return client.Close()
 }
@@ -247,18 +262,24 @@ func publishCmd(ctx *cli.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "publish call failed.")
 	}
-	logger.Log("event", "published")
+	log.Log("event", "published")
 	goon.Dump(reply)
 	return client.Close()
 }
 
-func createHistoryStreamCmd(ctx *cli.Context) error {
+func historyStreamCmd(ctx *cli.Context) error {
 	id := ctx.Args().Get(0)
 	if id == "" {
 		return errors.New("createHist: id can't be empty")
 	}
 	arg := map[string]interface{}{
-		"content": id,
+		"id":      id,
+		"limit":   ctx.Int("limit"),
+		"seq":     ctx.Int("seq"),
+		"live":    ctx.Bool("live"),
+		"reverse": ctx.Bool("reverse"),
+		"keys":    ctx.Bool("keys"),
+		"values":  ctx.Bool("values"),
 	}
 	reply := make(chan map[string]interface{})
 	go func() {
@@ -266,13 +287,13 @@ func createHistoryStreamCmd(ctx *cli.Context) error {
 			goon.Dump(r)
 		}
 	}()
-	if err := client.Source("createHistoryStream", arg, reply); err != nil {
+	if err := client.Source("createHistoryStream", reply, arg); err != nil {
 		return errors.Wrap(err, "source stream call failed")
 	}
 	return client.Close()
 }
 
-func createLogStream(ctx *cli.Context) error {
+func logStreamCmd(ctx *cli.Context) error {
 	reply := make(chan map[string]interface{})
 	go func() {
 		for r := range reply {
@@ -294,7 +315,20 @@ func callCmd(ctx *cli.Context) error {
 	if err := client.Call(cmd, &reply, ctx.Args().Slice()); err != nil {
 		return errors.Wrapf(err, "%s: call failed.", cmd)
 	}
-	logger.Log("event", "call reply")
+	log.Log("event", "call reply")
 	goon.Dump(reply)
+	return client.Close()
+}
+
+func query(ctx *cli.Context) error {
+	reply := make(chan map[string]interface{})
+	go func() {
+		for r := range reply {
+			goon.Dump(r)
+		}
+	}()
+	if err := client.Source("query.read", reply, ctx.Args().Get(0)); err != nil {
+		return errors.Wrap(err, "source stream call failed")
+	}
 	return client.Close()
 }
