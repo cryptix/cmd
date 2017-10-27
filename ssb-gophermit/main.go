@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"cryptoscope.co/go/binpath"
-
 	"cryptoscope.co/go/panopticon"
 	"cryptoscope.co/go/voyeur"
 	"github.com/cryptix/go/logging"
@@ -38,6 +37,8 @@ var (
 
 	bdb    *badger.DB
 	pstore *panopticon.Store
+
+	Revision = "unset"
 )
 
 func init() {
@@ -98,8 +99,6 @@ func initClient(ctx *cli.Context) error {
 	return nil
 }
 
-var Revision = "unset"
-
 func main() {
 	logging.SetupLogging(nil)
 	log = logging.Logger("gophermit")
@@ -156,7 +155,7 @@ func purgeCmd(ctx *cli.Context) error {
 func lsCmd(ctx *cli.Context) error {
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchSize = 50
-	return bdb.Update(func(txn *badger.Txn) error {
+	return bdb.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(opt)
 		for it.Rewind(); it.Valid(); it.Next() {
 			i := it.Item()
@@ -199,18 +198,20 @@ func slurpCmd(ctx *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "could not MkSubStore")
 	}
+	i := 0
 	msgs := make(chan map[string]interface{})
+	wait := make(chan bool)
 	go func() {
-		i := 1
 		start := time.Now()
 		for r := range msgs {
 			pstore.OnEvent(context.TODO(), testEvent{r})
+			i++
 			if i%1000 == 0 {
 				log.Log("msg", "processed", "i", i, "took", fmt.Sprintf("%v", time.Since(start)))
 				start = time.Now()
 			}
-			i++
 		}
+		wait <- true
 	}()
 	opts := map[string]interface{}{
 		"id":    ctx.String("id"),
@@ -218,8 +219,11 @@ func slurpCmd(ctx *cli.Context) error {
 		"seq":   ctx.Int("seq"),
 	}
 	if err := client.Source("createHistoryStream", msgs, opts); err != nil {
-		log.Log("err", errors.Wrap(err, "source stream call failed"))
+		//log.Log("warning", errors.Wrap(err, "source stream call failed"))
 	}
+	close(msgs)
+	log.Log("done", "slurp", "msgs", i-1, "id", ctx.String("id"))
+	<-wait
 	check(bdb.Close())
 	return client.Close()
 }
