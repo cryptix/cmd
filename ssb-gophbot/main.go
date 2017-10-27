@@ -9,14 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cryptix/go-muxrpc"
-	"github.com/cryptix/go-muxrpc/codec"
 	"github.com/cryptix/go/logging"
 	"github.com/cryptix/secretstream"
 	"github.com/cryptix/secretstream/secrethandshake"
 	"github.com/pkg/errors"
 	"github.com/shurcooL/go-goon"
 	"gopkg.in/urfave/cli.v2"
+	"scuttlebot.io/go/muxrpc"
+	"scuttlebot.io/go/muxrpc/codec"
 )
 
 var (
@@ -113,6 +113,7 @@ CAVEAT: only one argument...
 						&cli.StringFlag{Name: "text", Value: "Hello, World!"},
 						&cli.StringFlag{Name: "root", Usage: "the ID of the first message of the thread"},
 						&cli.StringFlag{Name: "branch", Usage: "the post ID that is beeing replied to"},
+						&cli.StringFlag{Name: "channel"},
 						&cli.StringSliceFlag{Name: "recps", Usage: "posting to these IDs privatly"},
 					},
 				},
@@ -198,6 +199,9 @@ func privatePublishCmd(ctx *cli.Context) error {
 		"text": ctx.String("text"),
 		"type": ctx.String("type"),
 	}
+	if c := ctx.String("channel"); c != "" {
+		content["channel"] = c
+	}
 	if r := ctx.String("root"); r != "" {
 		content["root"] = r
 		if b := ctx.String("branch"); b != "" {
@@ -210,12 +214,8 @@ func privatePublishCmd(ctx *cli.Context) error {
 	if len(recps) == 0 {
 		return errors.Errorf("private.publish: 0 recps.. that would be quite the lonely message..")
 	}
-	arg := map[string]interface{}{
-		"content": content,
-		"rcps":    recps,
-	}
 	var reply map[string]interface{}
-	err := client.Call("private.publish", arg, &reply)
+	err := client.Call("private.publish", &reply, content, recps)
 	if err != nil {
 		return errors.Wrapf(err, "publish call failed.")
 	}
