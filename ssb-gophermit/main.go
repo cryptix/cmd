@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -14,9 +12,11 @@ import (
 	"strings"
 	"time"
 
+	kitlog "github.com/go-kit/kit/log"
+
 	"cryptoscope.co/go/binpath"
-	"cryptoscope.co/go/panopticon"
-	"cryptoscope.co/go/voyeur"
+	"cryptoscope.co/go/specialκ"
+	"cryptoscope.co/go/specialκ/persistent"
 	"github.com/cryptix/go/logging"
 	"github.com/cryptix/secretstream"
 	"github.com/cryptix/secretstream/secrethandshake"
@@ -36,7 +36,7 @@ var (
 	check = logging.CheckFatal
 
 	bdb    *badger.DB
-	pstore *panopticon.Store
+	pstore specialκ.MFR
 
 	Revision = "unset"
 )
@@ -95,7 +95,7 @@ func initClient(ctx *cli.Context) error {
 	opts.ValueDir = ctx.String("db")
 	bdb, err = badger.Open(opts)
 	check(err)
-	pstore = panopticon.NewStore(bdb, voyeur.Fwd)
+	pstore = persistent.New(persistent.JSONCodec, bdb, log)
 	return nil
 }
 
@@ -174,37 +174,54 @@ func lsCmd(ctx *cli.Context) error {
 	})
 }
 
-type testEvent struct{ Msg map[string]interface{} }
+type ssbMsg map[string]interface{}
 
-func (te testEvent) EventType() string { return "testev" }
+func slurpCmd(c *cli.Context) error {
+	emitter, src := pstore.Pair(ssbMsg{})
 
-var msgpath = binpath.Must(binpath.FromString("msgs"))
+	ctx := context.TODO()
+	specialκ.Then(ctx, src, map[string]specialκ.Sink{
+		"type": pstore.Map(ssbMsg{}, func(_ context.Context, e specialκ.Entry) specialκ.Entry {
+			msg, ok := e.Value.(ssbMsg)
+			if ok {
+				content := c2m(msg, "value", "content")
+				var t string
+				if content == nil {
+					t = "string"
+				} else {
+					t = content["type"].(string)
+				}
+				e.Prefix = binpath.JoinStrings("type", t)
+				e.Key = binpath.FromString(msg["key"].(string))
+			}
+			return e
+		}),
+		"pub": pstore.Filter(ssbMsg{}, func(_ context.Context, e specialκ.Entry) bool {
+			msg, ok := e.Value.(ssbMsg)
+			if ok {
+				content := c2m(msg, "value", "content")
+				if content == nil {
+					return false
+				}
+				if t := content["type"].(string); t == "pub" {
+					return true
+				}
+			}
+			return false
+		}),
+	}, kitlog.NewNopLogger())
 
-func slurpRouter(ctx context.Context, s *panopticon.Store, em voyeur.Emitter, ev voyeur.Event) {
-	msg := ev.(testEvent).Msg
-
-	mk, err := binpath.FromString(msg["key"].(string))
-	check(err)
-
-	var b bytes.Buffer
-	check(json.NewEncoder(&b).Encode(msg["value"]))
-
-	err = s.Put(binpath.Join(msgpath, mk), b.Bytes())
-	check(err)
-}
-
-func slurpCmd(ctx *cli.Context) error {
-	_, err := pstore.MkSubStore("route", slurpRouter)
-	if err != nil {
-		return errors.Wrap(err, "could not MkSubStore")
-	}
-	i := 0
-	msgs := make(chan map[string]interface{})
+	var i uint64
+	msgs := make(chan ssbMsg)
 	wait := make(chan bool)
 	go func() {
 		start := time.Now()
 		for r := range msgs {
-			pstore.OnEvent(context.TODO(), testEvent{r})
+			emitter.Emit(ctx, specialκ.Entry{
+				Seq:   i,
+				Value: r,
+				Key:   binpath.FromString(r["key"].(string)),
+			})
 			i++
 			if i%1000 == 0 {
 				log.Log("msg", "processed", "i", i, "took", fmt.Sprintf("%v", time.Since(start)))
@@ -214,16 +231,27 @@ func slurpCmd(ctx *cli.Context) error {
 		wait <- true
 	}()
 	opts := map[string]interface{}{
-		"id":    ctx.String("id"),
-		"limit": ctx.Int("limit"),
-		"seq":   ctx.Int("seq"),
+		"id":    c.String("id"),
+		"limit": c.Int("limit"),
+		"seq":   c.Int("seq"),
 	}
 	if err := client.Source("createHistoryStream", msgs, opts); err != nil {
-		//log.Log("warning", errors.Wrap(err, "source stream call failed"))
+		log.Log("warning", errors.Wrap(err, "source stream call failed"))
 	}
 	close(msgs)
-	log.Log("done", "slurp", "msgs", i-1, "id", ctx.String("id"))
+	log.Log("done", "slurp", "msgs", i-1, "id", c.String("id"))
 	<-wait
 	check(bdb.Close())
 	return client.Close()
+}
+
+func c2m(v map[string]interface{}, fields ...string) map[string]interface{} {
+	var ok bool
+	for _, f := range fields {
+		v, ok = v[f].(map[string]interface{})
+		if !ok {
+			return nil
+		}
+	}
+	return v
 }
