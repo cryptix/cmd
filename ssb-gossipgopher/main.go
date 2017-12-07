@@ -111,15 +111,80 @@ func initClient(ctx *cli.Context) error {
 
 func serveCmd(ctx *cli.Context) error {
 	client.HandleCall("gossip.ping", func(msg json.RawMessage) interface{} {
-		return nil
+		//var args []map[string]interface{}
+		var args []struct {
+			Timeout int
+		}
+		err := json.Unmarshal(msg, &args)
+		if err != nil {
+			return errors.Wrap(err, "failed to decode ping arguments")
+		}
+		timeout := 1000
+		if len(args) == 1 {
+			/*
+				if t, hasTimeout := args[0]["timeout"]; hasTimeout {
+					timeout = t.(float64)
+				}
+			*/
+			timeout = args[0].Timeout
+		}
+		log.Log("event", "incoming call", "cmd", "ping", "timeout", timeout)
+		return struct {
+			Pong string
+		}{"test"}
 	})
 
 	client.HandleSource("blobs.createWants", func(msg json.RawMessage) chan interface{} {
-		return nil
+		log.Log("event", "incoming call", "cmd", "blob wants", "msg", string(msg))
+		type blobs struct {
+			Ref string
+		}
+		blobWants := make(chan interface{})
+		go func() {
+			for i := 0; i <= 10; i++ {
+				blobWants <- blobs{
+					Ref: "123",
+				}
+			}
+			close(blobWants)
+			log.Log("event", "source done", "cmd", "blob wants")
+		}()
+		return blobWants
 	})
 
 	client.HandleSource("createHistoryStream", func(msg json.RawMessage) chan interface{} {
-		return nil
+		resp := make(chan interface{})
+		var args []struct {
+			Id         string
+			Seq        int
+			Keys, Live bool
+		}
+		err := json.Unmarshal(msg, &args)
+		if err != nil {
+			go func() {
+				resp <- errors.Wrap(err, "failed to decode ping arguments")
+			}()
+			return resp
+		}
+
+		for i, arg := range args {
+			log.Log("event", "incoming call", "cmd", "histStream", "i", i, "id", arg.Id, "seq", arg.Seq)
+		}
+		type reply struct {
+			Author string
+			Msg    string
+		}
+		go func() {
+			for i := 0; i <= 10; i++ {
+				resp <- reply{
+					Author: "@123",
+					Msg:    fmt.Sprintf("Msg%d", i),
+				}
+			}
+			close(resp)
+			log.Log("event", "source done", "cmd", "histStream")
+		}()
+		return resp
 	})
 
 	//""

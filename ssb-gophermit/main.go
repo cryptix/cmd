@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	kitlog "github.com/go-kit/kit/log"
-
 	"cryptoscope.co/go/binpath"
 	"cryptoscope.co/go/specialκ"
 	"cryptoscope.co/go/specialκ/persistent"
@@ -21,6 +19,7 @@ import (
 	"github.com/cryptix/secretstream"
 	"github.com/cryptix/secretstream/secrethandshake"
 	"github.com/dgraph-io/badger"
+	kitlog "github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
 	"gopkg.in/urfave/cli.v2"
 	"scuttlebot.io/go/muxrpc"
@@ -153,22 +152,22 @@ func purgeCmd(ctx *cli.Context) error {
 }
 
 func lsCmd(ctx *cli.Context) error {
+	pref, err := binpath.ParseString(ctx.Args().First())
+	if err != nil {
+		return err
+	}
 	opt := badger.DefaultIteratorOptions
 	opt.PrefetchSize = 50
 	return bdb.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(opt)
-		for it.Rewind(); it.Valid(); it.Next() {
-			i := it.Item()
-			fmt.Printf("k: %q %d\n", i.Key(), i.Version())
 
-			/*
-				v, err := i.Value()
-				check(err)
-				var msg map[string]interface{}
-				err = json.NewDecoder(bytes.NewReader(v)).Decode(&msg)
-				check(err)
-				goon.Dump(msg)
-			*/
+		for it.Seek(pref); it.ValidForPrefix(pref); it.Next() {
+			i := it.Item()
+			v, err := i.Value()
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%s: %d %x\n", binpath.Path(i.Key()), len(v), i.UserMeta())
 		}
 		return nil
 	})
@@ -177,10 +176,23 @@ func lsCmd(ctx *cli.Context) error {
 type ssbMsg map[string]interface{}
 
 func slurpCmd(c *cli.Context) error {
+	start := time.Now()
+
 	emitter, src := pstore.Pair(ssbMsg{})
 
 	ctx := context.TODO()
 	specialκ.Then(ctx, src, map[string]specialκ.Sink{
+		"author": pstore.Map(ssbMsg{}, func(_ context.Context, e specialκ.Entry) specialκ.Entry {
+			msg, ok := e.Value.(ssbMsg)
+			if ok {
+				author := c2m(msg, "value")["author"].(string)
+				seq := c2m(msg, "value")["sequence"].(float64)
+				e.Prefix = binpath.JoinStrings("author", author)
+				e.Key = binpath.FromUint64(uint64(seq))
+				e.Value = e.Seq
+			}
+			return e
+		}),
 		"type": pstore.Map(ssbMsg{}, func(_ context.Context, e specialκ.Entry) specialκ.Entry {
 			msg, ok := e.Value.(ssbMsg)
 			if ok {
@@ -193,6 +205,7 @@ func slurpCmd(c *cli.Context) error {
 				}
 				e.Prefix = binpath.JoinStrings("type", t)
 				e.Key = binpath.FromString(msg["key"].(string))
+				// TODO: reduce to ssb-host struct
 			}
 			return e
 		}),
@@ -215,7 +228,7 @@ func slurpCmd(c *cli.Context) error {
 	msgs := make(chan ssbMsg)
 	wait := make(chan bool)
 	go func() {
-		start := time.Now()
+		last := time.Now()
 		for r := range msgs {
 			emitter.Emit(ctx, specialκ.Entry{
 				Seq:   i,
@@ -224,8 +237,8 @@ func slurpCmd(c *cli.Context) error {
 			})
 			i++
 			if i%1000 == 0 {
-				log.Log("msg", "processed", "i", i, "took", fmt.Sprintf("%v", time.Since(start)))
-				start = time.Now()
+				log.Log("msg", "processed", "i", i, "took", fmt.Sprintf("%v", time.Since(last)))
+				last = time.Now()
 			}
 		}
 		wait <- true
@@ -239,7 +252,7 @@ func slurpCmd(c *cli.Context) error {
 		log.Log("warning", errors.Wrap(err, "source stream call failed"))
 	}
 	close(msgs)
-	log.Log("done", "slurp", "msgs", i-1, "id", c.String("id"))
+	log.Log("done", "slurp", "msgs", i-1, "id", c.String("id"), "took", fmt.Sprintf("%v", time.Since(start)))
 	<-wait
 	check(bdb.Close())
 	return client.Close()
