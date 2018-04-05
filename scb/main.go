@@ -1,4 +1,4 @@
-package main
+package main // import "github.com/cryptix/cmd/scb"
 
 import (
 	"encoding/base64"
@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"cryptoscope.co/go/secretstream"
+	"cryptoscope.co/go/secretstream/secrethandshake"
 	"github.com/codegangsta/cli"
 	"github.com/cryptix/go/logging"
-	"github.com/cryptix/secretstream"
-	"github.com/cryptix/secretstream/secrethandshake"
-	"github.com/dustin/go-humanize"
+	humanize "github.com/dustin/go-humanize"
 	kitlog "github.com/go-kit/kit/log"
 	"github.com/miolini/datacounter"
 )
