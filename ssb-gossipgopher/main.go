@@ -1,32 +1,41 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"os/user"
 	"path/filepath"
+	"time"
 
+	"cryptoscope.co/go/muxrpc"
+	"cryptoscope.co/go/muxrpc/codec"
+	"cryptoscope.co/go/secretstream"
+	"cryptoscope.co/go/secretstream/secrethandshake"
+	"github.com/cryptix/go/debug"
 	"github.com/cryptix/go/logging"
-	"github.com/cryptix/secretstream"
-	"github.com/cryptix/secretstream/secrethandshake"
+	humanize "github.com/dustin/go-humanize"
+	kitlog "github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
-	"gopkg.in/urfave/cli.v2"
-	"scuttlebot.io/go/muxrpc"
-	"scuttlebot.io/go/muxrpc/codec"
+	cli "gopkg.in/urfave/cli.v2"
 )
 
 var (
 	sbotAppKey     []byte
 	defaultKeyFile string
-	client         *muxrpc.Client
+	packer         muxrpc.Packer
+	rpc            muxrpc.Endpoint
+	localKey       *secrethandshake.EdKeyPair
+	localID        string
 
-	running chan error
+	l net.Listener
 
 	log   logging.Interface
 	check = logging.CheckFatal
+
+	verboseLogging bool
 
 	Revision = "unset"
 )
@@ -70,124 +79,122 @@ func main() {
 	}
 
 	check(app.Run(os.Args))
+
+	ctx := context.Background()
+	for {
+		start := time.Now()
+		conn, err := l.Accept()
+		if err != nil {
+			log.Log("error", "accept", "err", err)
+			continue
+		}
+
+		go func() {
+			rem := conn.RemoteAddr()
+			shsAddr, ok := rem.(secretstream.Addr)
+			if !ok {
+				conn.Close()
+				log.Log("err", errors.New("could not cast remote address"))
+				return
+			}
+			id := SSBID(shsAddr.PubKey())
+			log.Log("event", "connection established",
+				"id", id,
+				"addr", shsAddr.Addr.String(),
+			)
+			counter := debug.WrapCounter(conn)
+			p := muxrpc.NewPacker(counter)
+			if verboseLogging {
+				p = muxrpc.NewPacker(codec.Wrap(kitlog.With(log, "id", id), counter))
+			}
+			handler := sbotHandler{id}
+			rpc = muxrpc.Handle(p, handler)
+
+			go serveRpc(ctx, start, id, rpc, counter)
+		}()
+	}
+}
+func serveRpc(ctx context.Context, start time.Time, id string, rpc muxrpc.Endpoint, counter *debug.Counter) {
+
+	err := rpc.(muxrpc.Server).Serve(ctx)
+	log.Log("event", "connection done",
+		"id", id,
+		"err", err,
+		"took", time.Since(start),
+		"sent", humanize.Bytes(counter.Cw.Count()),
+		"rcvd", humanize.Bytes(counter.Cr.Count()),
+	)
 }
 
 func initClient(ctx *cli.Context) error {
-	localKey, err := secrethandshake.LoadSSBKeyPair(ctx.String("key"))
+	verboseLogging = ctx.Bool("verbose")
+	var err error
+	localKey, err = secrethandshake.LoadSSBKeyPair(ctx.String("key"))
 	if err != nil {
 		return errors.Wrap(err, "failed to load keypair")
 	}
-	var conn net.Conn
+	localID = SSBID(localKey.Public[:])
 	srv, err := secretstream.NewServer(*localKey, sbotAppKey)
 	if err != nil {
 		return errors.Wrap(err, "failed to create server")
 	}
-	l, err := srv.Listen("tcp", ctx.String("addr"))
+	l, err = srv.Listen("tcp", ctx.String("addr"))
 	if err != nil {
 		return err
 	}
-	log.Log("msg", "listener created", "addr", l.Addr().String())
+	log.Log("msg", "listener created", "addr", l.Addr(), "ssbID", localID)
 
-	conn, err = l.Accept()
-	if err != nil {
-		return err
-	}
-	log.Log("msg", "remote connection accepted", "addr", conn.RemoteAddr().String())
-
-	if ctx.Bool("verbose") {
-		client = muxrpc.NewClient(log, codec.Wrap(log, conn))
-	} else {
-		client = muxrpc.NewClient(log, conn)
-	}
-
-	running = make(chan error)
-	go func() {
-		client.Handle()
-		log.Log("warning", "muxrpc disconnected")
-		running <- errors.New("muxrpc closed")
-	}()
 	return nil
 }
 
+func SSBID(pubKey []byte) string {
+	return fmt.Sprintf("@%s.ed25519", base64.StdEncoding.EncodeToString(pubKey))
+}
+
 func serveCmd(ctx *cli.Context) error {
-	client.HandleCall("gossip.ping", func(msg json.RawMessage) interface{} {
-		//var args []map[string]interface{}
-		var args []struct {
-			Timeout int
-		}
-		err := json.Unmarshal(msg, &args)
-		if err != nil {
-			return errors.Wrap(err, "failed to decode ping arguments")
-		}
-		timeout := 1000
-		if len(args) == 1 {
-			/*
+	/*
+		client.HandleCall("gossip.ping", func(msg json.RawMessage) interface{} {
+			//var args []map[string]interface{}
+			var args []struct {
+				Timeout int
+			}
+			err := json.Unmarshal(msg, &args)
+			if err != nil {
+				return errors.Wrap(err, "failed to decode ping arguments")
+			}
+			timeout := 1000
+			if len(args) == 1 {
 				if t, hasTimeout := args[0]["timeout"]; hasTimeout {
 					timeout = t.(float64)
 				}
-			*/
-			timeout = args[0].Timeout
-		}
-		log.Log("event", "incoming call", "cmd", "ping", "timeout", timeout)
-		return struct {
-			Pong string
-		}{"test"}
-	})
-
-	client.HandleSource("blobs.createWants", func(msg json.RawMessage) chan interface{} {
-		log.Log("event", "incoming call", "cmd", "blob wants", "msg", string(msg))
-		type blobs struct {
-			Ref string
-		}
-		blobWants := make(chan interface{})
-		go func() {
-			for i := 0; i <= 10; i++ {
-				blobWants <- blobs{
-					Ref: "123",
-				}
+				timeout = args[0].Timeout
 			}
-			close(blobWants)
-			log.Log("event", "source done", "cmd", "blob wants")
-		}()
-		return blobWants
-	})
+			log.Log("event", "incoming call", "cmd", "ping", "timeout", timeout)
+			return struct {
+				Pong string
+			}{"test"}
+		})
+	*/
 
-	client.HandleSource("createHistoryStream", func(msg json.RawMessage) chan interface{} {
-		resp := make(chan interface{})
-		var args []struct {
-			Id         string
-			Seq        int
-			Keys, Live bool
-		}
-		err := json.Unmarshal(msg, &args)
-		if err != nil {
+	/*
+		client.HandleSource("blobs.createWants", func(msg json.RawMessage) chan interface{} {
+			log.Log("event", "incoming call", "cmd", "blob wants", "msg", string(msg))
+			type blobs struct {
+				Ref string
+			}
+			blobWants := make(chan interface{})
 			go func() {
-				resp <- errors.Wrap(err, "failed to decode ping arguments")
-			}()
-			return resp
-		}
-
-		for i, arg := range args {
-			log.Log("event", "incoming call", "cmd", "histStream", "i", i, "id", arg.Id, "seq", arg.Seq)
-		}
-		type reply struct {
-			Author string
-			Msg    string
-		}
-		go func() {
-			for i := 0; i <= 10; i++ {
-				resp <- reply{
-					Author: "@123",
-					Msg:    fmt.Sprintf("Msg%d", i),
+				for i := 0; i <= 10; i++ {
+					blobWants <- blobs{
+						Ref: "123",
+					}
 				}
-			}
-			close(resp)
-			log.Log("event", "source done", "cmd", "histStream")
-		}()
-		return resp
-	})
+				close(blobWants)
+				log.Log("event", "source done", "cmd", "blob wants")
+			}()
+			return blobWants
+		})
+	*/
 
-	//""
-
-	return <-running
+	return nil
 }
