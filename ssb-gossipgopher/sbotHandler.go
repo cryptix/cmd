@@ -1,15 +1,15 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
+	"cryptoscope.co/go/luigi"
 	"cryptoscope.co/go/muxrpc"
+	"cryptoscope.co/go/ssb"
 	"github.com/pkg/errors"
 )
 
@@ -121,111 +121,45 @@ type RawSignedMessage struct {
 }
 
 func (h sbotHandler) HandleConnect(ctx context.Context, e muxrpc.Endpoint) {
-	var q = createHistArgs{false, false, h.remoteID, 185}
+	var q = createHistArgs{false, false, h.remoteID, 0}
 	source, err := e.Source(ctx, RawSignedMessage{}, []string{"createHistoryStream"}, q)
 	if err != nil {
 		log.Log("handleConnect", "createHistoryStream", "err", err)
 		return
 	}
 	i := 0
+	ref, err := ssb.ParseRef(h.remoteID)
+	if err != nil {
+		log.Log("handleConnect", "ssb.ParseRef", "err", err)
+		return
+	}
 	for {
+		start := time.Now()
 		v, err := source.Next(ctx)
+		if luigi.IsEOS(err) {
+			break
+		}
 		if err != nil {
 			log.Log("handleConnect", "createHistoryStream", "i", i, "err", err)
 			break
 		}
-		fmt.Printf("\n####\n%d hist:\n", i)
 
 		rmsg := v.(RawSignedMessage)
 
-		// simple
-		var smsg SignedMessage
-		if err := json.Unmarshal(rmsg.RawMessage, &smsg); err != nil {
-			log.Log("handleConnect", "createHistoryStream", "i", i, "step", "simple Unmarshal", "err", err)
-			break
-		}
-
-		encoded, err := Encode(smsg)
+		buf, sig, err := ssb.EncodePreserveOrder(rmsg.RawMessage)
 		if err != nil {
 			err = errors.Wrap(err, "simple Encode failed")
 			log.Log("handleConnect", "createHistoryStream", "i", i, "err", err)
-		} else {
-			fmt.Printf("##Simple:\n%s\n", encoded)
-		}
-
-		// new approach
-		dec := json.NewDecoder(bytes.NewReader(rmsg.RawMessage))
-		var buf bytes.Buffer
-		t, err := dec.Token()
-		if err != nil {
-			log.Log("fail", "tokenize", "err", err, "i", i, "msg", "expected {")
 			break
 		}
 
-		if t.(json.Delim) != '{' {
-			log.Log("fail", "tokenize", "first", t, "i", i, "msg", "expected {")
+		if err := sig.Verify(buf, *ref); err != nil {
+			err = errors.Wrap(err, "msg verify failed")
+			log.Log("handleConnect", "createHistoryStream", "i", i, "err", err)
 			break
 		}
+		fmt.Printf("\n####\nverified hist%d (took %v):\n%s\n", i, time.Since(start), buf)
 
-		fmt.Fprintf(&buf, "{\n")
-
-		var depth = 1
-		var isKey = true
-		var isObject = true
-		for {
-			t, err := dec.Token()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Log("fail", "tokenize", "err", err, "i", i)
-				break
-			}
-			switch v := t.(type) {
-			case json.Delim: // [ ] { }
-				switch v {
-				case '[':
-					//isArray = true // TODO: nesting...
-					depth++
-				case '{':
-					isObject = true
-					isKey = true
-					depth++
-				case ']':
-					fallthrough
-				case '}':
-					depth--
-				}
-				fmt.Fprintf(&buf, "%s\n%s", v, strings.Repeat("  ", depth))
-			case string:
-				if isObject {
-					if isKey {
-						fmt.Fprintf(&buf, "%q: ", v)
-					} else {
-						fmt.Fprintf(&buf, "%q", v)
-						if dec.More() {
-							fmt.Fprintf(&buf, ",")
-						}
-						fmt.Fprintf(&buf, "\n%s", strings.Repeat("  ", depth))
-					}
-					isKey = !isKey
-				} else {
-					fmt.Fprintf(&buf, "%q", v)
-				}
-			default:
-				if isObject && !isKey {
-					fmt.Fprintf(&buf, "%v", v)
-					if dec.More() {
-						fmt.Fprintf(&buf, ",")
-					}
-					fmt.Fprintf(&buf, "\n%s", strings.Repeat("  ", depth))
-					isKey = !isKey
-				} else {
-					fmt.Fprintf(&buf, `%v`, v)
-				}
-			}
-		}
-		fmt.Printf("##New:\n%s\n", buf)
 		i++
 	}
 	log.Log("handle", "connect", "Hello", h.remoteID)
